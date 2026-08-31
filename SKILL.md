@@ -1,83 +1,82 @@
 ---
 name: 3x-ui-admin
-description: Administer a 3x-ui panel over its HTTP API — inbounds, clients, hosts, master/node links, routing, Xray and panel settings, subscriptions. Use when asked to inspect or change anything inside a 3x-ui panel, to audit its configuration for known footguns, or to diagnose why a client, subscription or node link stopped working.
+description: Administer a 3x-ui panel over its HTTP API — inbounds, clients, hosts, master/node links, routing, Xray and panel settings, subscriptions. Use when asked to inspect or change anything inside a 3x-ui panel, to audit a panel configuration for known footguns, or to work out why a client, subscription or node link stopped working. Триггеры: 3x-ui, x-ui, панель, инбаунд, клиент, подписка, нода, маршрутизация.
+license: MIT
 ---
 
 # 3x-ui admin
 
-`./xui` talks to a 3x-ui panel through `/panel/api` with a bearer token. Everything
-the panel owns is reachable this way; there is no SSH in this skill. The few
-operations that genuinely need shell access are listed in `docs/recovery.md`.
+`./xui` talks to a 3x-ui panel through `/panel/api` with a bearer token. Everything the panel owns is reachable that way, so this skill carries no SSH; the few operations that genuinely need a shell are listed in `docs/recovery.md`.
 
-## Reaching a panel
+## Access
 
-Resolution order, first hit wins: command-line flags, `XUI_URL` / `XUI_TOKEN`,
-`secrets/url` + `secrets/token`, then a node's TOML in `$XUI_NODES_DIR`.
+Resolution order, first hit wins: command-line flags, `XUI_URL` / `XUI_TOKEN`, `secrets/url` + `secrets/token`, then a node's TOML in `$XUI_NODES_DIR`. Never hardcode a token; never print one.
 
-```sh
-./xui inbound list                      # uses secrets/
-./xui --node se-1 nodes health          # uses the registry
-XUI_URL=... XUI_TOKEN=... ./xui client list
+```bash
+./xui inbound list                        # from secrets/
+./xui --node se-1 nodes health            # from the registry
+XUI_URL=… XUI_TOKEN=… ./xui client list
 ```
 
-**The URL must include the panel's secret base path**, because the API lives under
-it. A 404 with an empty body means the base path is wrong or the token was refused
-— those two failures look identical from outside, and the client says so.
+The URL must include the panel's secret base path, because the API lives under it: `https://host:2053/abc123`, not `https://host:2053`. A 404 with an empty body means the base path is wrong or the token was refused — the two are indistinguishable from outside, and the client says so rather than guessing.
 
-Panels commonly serve a certificate for a name they are not reached by, so TLS
-verification is off unless `--verify-tls` or `verify_tls = true` in the registry.
+TLS verification is off by default because panels routinely present a certificate for a name they are not reached by. Turn it on with `--verify-tls` when the certificate does match.
 
-## Rules this skill follows
+## Common calls
 
-**Never print a credential.** Client UUIDs, passwords, Reality and WireGuard keys,
-subscription ids and tokens are masked by default; `--reveal` is a deliberate
-choice, and its output must not be pasted anywhere. Client labels are masked to a
-recognisable stub because in a private fleet they hold real people's names.
-
-**Every mutation is snapshot, change, verify.** Read the object, apply the change,
-write it back whole, read it again, and diff: if anything moved that was not meant
-to, roll back from the snapshot. This is not a workaround for one bad field — the
-panel's update endpoints replace rather than patch, so *any* field omitted from a
-write is reset.
-
-**An empty response body is a failure.** The panel answers that way for a path it
-does not serve, so treating it as success reports work that never happened.
-
-**Say what a change breaks before making it.** Changing a subscription path
-invalidates every distributed link; changing `webListen`, `webPort` or a
-certificate path can leave the panel unreachable with no rollback. `docs/recipes.md`
-carries the safe order for those.
-
-## What the panel gets wrong, and what to do about it
-
-- `clients/add` takes `{"client": {...}, "inboundIds": [N]}`; `clients/update/{email}`
-  takes a **flat** object. The hybrid shape is accepted and silently nulls every
-  field not at the top level.
-- **The panel does not answer in the shape it accepts.** Reading a client returns a
-  wrapper (`client`, `inboundIds`, `usedTraffic`, …) around the object; within it
-  `id` is the row's numeric key, while a write expects the client's UUID in that
-  same field, and `allowedIPs` is read as a string but written as a list. Each
-  mismatch is a hard type error from the panel, so a round trip has to convert.
-- Measured on a live panel: an update carrying only `email`, `id` and the field
-  being changed left the client **with an empty flow and disabled**. It still
-  appears in the panel; it simply cannot connect.
-- `clients/add` never sets `flow`. On a Vision inbound it must be passed explicitly.
-- An omitted `enable` on update evaluates to `false` and disables the client.
-- `tgId` is an int64; a string rejects the whole request.
-- Creating a WireGuard inbound without a server key makes Xray reject the **entire**
-  config, taking the node down — generate the key first.
-- Deleting an inbound orphans its clients; deleting a client is clean.
-- `subId` is regenerated by two different code paths, and a new one invalidates
-  every subscription link already handed out.
-- `tls_verify_mode: "verify"` verifies nothing. Only `pin` and `mtls` authenticate
-  the peer.
-
-## Commands
-
-```
-nodes    list | health | link-check | registry
-inbound  list | get | settings
-client   list | get | traffic | idle | orphans | online
+```bash
+./xui nodes health                        # status, heartbeat age, versions, load
+./xui nodes link-check --require-private  # assert the link has not weakened
+./xui inbound settings 1                  # stream settings, decoded from JSON text
+./xui client traffic --top 10             # heaviest users, with last-seen
+./xui client idle --days 30               # who stopped connecting
+./xui client-edit set alice enable=false  # guarded edit
+./xui panel list sub                      # every setting matching "sub"
+./xui panel get subPath                   # one setting, with its consequences
 ```
 
-Add `--json` for machine-readable output, `--reveal` to unmask.
+## Rules
+
+Never print a credential. Client UUIDs and passwords, Reality and WireGuard keys, subscription ids and tokens are masked by default. `--reveal` is a deliberate choice and its output must not be pasted anywhere. Client labels are masked to a recognisable stub rather than to nothing: they are personal data, but they are also the only handle an operator has on a row.
+
+Every mutation is snapshot, change, verify. Read the object, apply the change, write it back whole, read it again, diff. If anything moved that was not asked for, roll back from the snapshot and report. This is not a workaround for one bad field — the update endpoints replace rather than patch, so any field omitted from a write is a field erased.
+
+An empty response body is a failure, never an empty result. The panel answers that way for a path it does not serve, so treating it as success reports work that never happened.
+
+Say what a change breaks before making it. Changing a subscription path kills every distributed link; changing `webListen`, `webPort` or a certificate path can leave the panel unreachable with no way back through the API. Those keys require `--i-understand`.
+
+Confirm destructive operations. Deleting a client removes its traffic history; deleting an inbound orphans its clients.
+
+## What the panel gets wrong
+
+`clients/add` takes `{"client": {…}, "inboundIds": [N]}` while `clients/update/{email}` takes a flat object. The hybrid shape is accepted and silently nulls every field not at the top level.
+
+The panel does not answer in the shape it accepts. Reading a client returns a wrapper (`client`, `inboundIds`, `usedTraffic`, …); inside it `id` is the row's numeric key, while a write expects the client's UUID in that same field, and `allowedIPs` is read as a string but written as a list. Each mismatch is a hard type error, so a faithful round trip has to convert.
+
+Measured on a live panel: an update carrying only `email`, `id` and one changed limit left the client with an empty flow and disabled. It still appeared in the UI; it simply could not connect.
+
+`clients/add` never sets `flow`, so on a Vision inbound it must be passed explicitly. An omitted `enable` on update evaluates to false. `tgId` is an int64 and a string rejects the whole request.
+
+Creating a WireGuard inbound without a server key makes Xray reject the entire config and the node stops serving — generate the key first.
+
+Deleting an inbound orphans its clients (`client orphans` finds them, `clients/delOrphans` removes them); deleting a client is clean.
+
+`subId` is regenerated by two different code paths, and a new one invalidates every subscription link already handed out.
+
+`tls_verify_mode: "verify"` verifies nothing — only `pin` and `mtls` authenticate the peer.
+
+## Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| 0 | done, or nothing to do |
+| 1 | the panel refused, or a write was rolled back |
+| 2 | bad usage, unknown key, or a guarded change without `--i-understand` |
+
+## Caveats
+
+Traffic counters live in a nested `traffic` object, not on the client itself, and they are cumulative since the last reset rather than per-period.
+
+A client's `flow` is stored per inbound attachment; a read returns the derived value, so a client on both a Vision and a WebSocket inbound legitimately shows one flow while carrying none on the second.
+
+`client idle` reads `lastOnline`, which is only written while the panel is running. A node that was down looks like a quiet client.
