@@ -1,0 +1,11 @@
+# Credentials and per-fleet state. Patterns are deliberately narrow: a blanket
+# *secret* would swallow the tests that guard against leaking secrets.
+secrets/
+*.db
+*.pem
+*.key
+exports/
+
+__pycache__/
+.venv/
+*.pyc

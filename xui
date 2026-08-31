@@ -1,0 +1,88 @@
+#!/usr/bin/env python3
+"""3x-ui panel administration over the HTTP API.
+
+Usage: xui [--node NAME] [--url URL] [--token-file PATH] GROUP COMMAND [...]
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from lib import config as config_module  # noqa: E402
+from lib.api import ApiError, Client  # noqa: E402
+from lib.commands import GROUPS  # noqa: E402
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="xui",
+        description="Administer a 3x-ui panel through its API.",
+    )
+    parser.add_argument("--node", help="node name from $XUI_NODES_DIR")
+    parser.add_argument("--url", help="panel URL including its base path")
+    parser.add_argument("--token-file", help="file holding the API token")
+    parser.add_argument(
+        "--verify-tls",
+        dest="verify_tls",
+        action="store_true",
+        default=None,
+        help="verify the panel's TLS certificate",
+    )
+    parser.add_argument(
+        "--no-verify-tls", dest="verify_tls", action="store_false", help=argparse.SUPPRESS
+    )
+    parser.add_argument(
+        "--reveal",
+        action="store_true",
+        help="print credentials in full instead of masking them",
+    )
+    parser.add_argument("--json", action="store_true", help="machine-readable output")
+
+    subparsers = parser.add_subparsers(dest="group", metavar="GROUP")
+    for name, group in GROUPS.items():
+        group_parser = subparsers.add_parser(name, help=group.help)
+        group.register(group_parser)
+    return parser
+
+
+def main(argv: list[str]) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+
+    if not args.group:
+        parser.print_help()
+        return 2
+
+    group = GROUPS[args.group]
+    if not getattr(args, "command", None):
+        print(f"xui {args.group}: no command given", file=sys.stderr)
+        return 2
+
+    try:
+        needs_panel = getattr(args, "needs_panel", True)
+        client = None
+        if needs_panel:
+            panel = config_module.resolve(
+                node=args.node,
+                url=args.url,
+                token_file=args.token_file,
+                verify_tls=args.verify_tls,
+            )
+            client = Client(panel)
+        return group.run(args, client)
+    except config_module.ConfigError as error:
+        print(f"config: {error}", file=sys.stderr)
+        return 2
+    except ApiError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+    except KeyboardInterrupt:
+        return 130
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))
