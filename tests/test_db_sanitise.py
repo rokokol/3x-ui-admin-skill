@@ -36,6 +36,11 @@ STREAM_SETTINGS = {"realitySettings": {"privateKey": REALITY_KEY, "dest": "examp
 
 def build(path: Path) -> None:
     connection = sqlite3.connect(path)
+    # The panel's export is in WAL mode, where writes land in a side file until
+    # a checkpoint folds them in. A fixture in the default journal mode cannot
+    # reproduce the failure that shipped: a scrub reported as done, written to
+    # the side file, and lost when only the .db was moved.
+    connection.execute("PRAGMA journal_mode = WAL")
     connection.executescript(
         """
         CREATE TABLE clients (id INTEGER PRIMARY KEY, email TEXT, uuid TEXT,
@@ -134,6 +139,18 @@ class TestSanitise(unittest.TestCase):
         sanitise(self.path)
         self.assertEqual(self.read("SELECT count(*) FROM inbound_client_ips")[0][0], 0)
         self.assertEqual(self.read("SELECT count(*) FROM node_client_ips")[0][0], 0)
+
+    def test_the_copy_carries_no_side_journal(self):
+        # The scrub has to leave a single self-contained file, because the caller
+        # moves the .db and nothing else. Asserting the journal mode states that
+        # directly, rather than hoping a checkpoint happened to run.
+        sanitise(self.path)
+        mode = self.read("PRAGMA journal_mode")[0][0]
+        self.assertEqual(mode.lower(), "delete", "a -wal file would be left behind")
+        self.assertFalse(
+            (self.path.parent / (self.path.name + "-wal")).exists(),
+            "the write-ahead log still exists beside the database",
+        )
 
     def test_edits_survive_a_move(self):
         # Regression: the export arrives in WAL mode, so edits live in a side

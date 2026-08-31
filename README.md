@@ -78,7 +78,10 @@ Add `--json` for machine-readable output and `--reveal` to print credentials in 
 ```bash
 python3 -m unittest discover -s tests    # offline, no panel needed
 python3 tests/integration.py             # against a real panel in a container
+python3 tests/falsify.py                 # break each guard, require the tests to notice
 ```
+
+The falsification harness edits one line of the implementation at a time — removes the verification step, blinds a check, skips the scrub — and reruns the suite. A defect reported as SURVIVED means nothing fails when that behaviour is broken, which is the only honest way to know the tests are worth running. It found two blind spots on its first run: the sanitiser's journal-mode fix and masking, neither of which had a test at all.
 
 The integration suite starts a throwaway 3x-ui in docker, mints a token inside it, and exercises the real thing: it corrupts a client with a partial update to prove the guard is needed, then repeats the edit through the guard to prove it works. It skips itself with a message when docker is unavailable.
 
