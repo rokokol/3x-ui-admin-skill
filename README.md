@@ -73,6 +73,15 @@ TLS verification is off by default because panels routinely present a certificat
 
 Add `--json` for machine-readable output and `--reveal` to print credentials in full.
 
+## Tests
+
+```bash
+python3 -m unittest discover -s tests    # offline, no panel needed
+python3 tests/integration.py             # against a real panel in a container
+```
+
+The integration suite starts a throwaway 3x-ui in docker, mints a token inside it, and exercises the real thing: it corrupts a client with a partial update to prove the guard is needed, then repeats the edit through the guard to prove it works. It skips itself with a message when docker is unavailable.
+
 ## Safety
 
 Credentials are masked in every output by default, and client labels are partially masked because in a private fleet they hold real names.

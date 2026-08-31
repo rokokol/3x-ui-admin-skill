@@ -57,6 +57,8 @@ Measured on a live panel: an update carrying only `email`, `id` and one changed 
 
 `clients/add` never sets `flow`, so on a Vision inbound it must be passed explicitly. An omitted `enable` on update evaluates to false. `tgId` is an int64 and a string rejects the whole request.
 
+The panel does not validate `flow` at all: it stores any string it is given, serves it, and the client fails to connect while the panel shows it as healthy. Measured against a real panel — the skill warns on a value Xray does not know, because nothing else will.
+
 Creating a WireGuard inbound without a server key makes Xray reject the entire config and the node stops serving — generate the key first.
 
 Deleting an inbound orphans its clients (`client orphans` finds them, `clients/delOrphans` removes them); deleting a client is clean.

@@ -13,6 +13,11 @@ from .. import render, snapshot
 
 help = "create, edit and delete clients"
 
+# Xray understands these and nothing else. The panel stores whatever string it is
+# given without checking, so a typo is accepted, saved and served - and the
+# client simply fails to connect, with the panel showing it as perfectly fine
+KNOWN_FLOWS = {"", "xtls-rprx-vision", "xtls-rprx-vision-udp443"}
+
 # Fields a caller may set directly. Anything not listed is either derived,
 # a credential the panel owns, or a link managed through attach/detach.
 EDITABLE = {
@@ -146,6 +151,12 @@ def run(args, client) -> int:
             except ValueError as error:
                 print(str(error))
                 return 2
+            if name == "flow" and changes[name] not in KNOWN_FLOWS:
+                print(
+                    f"warning: {changes[name]!r} is not a flow Xray knows. The panel "
+                    f"stores it anyway and the client will fail to connect. "
+                    f"Known: {', '.join(sorted(f or '(none)' for f in KNOWN_FLOWS))}"
+                )
 
         try:
             applied = snapshot.apply_and_verify(
@@ -181,6 +192,11 @@ def run(args, client) -> int:
         client.post("clients/add", body=body)
 
         created = _reader(client, args.email)()
+        if args.flow and args.flow not in KNOWN_FLOWS:
+            print(
+                f"warning: {args.flow!r} is not a flow Xray knows; the panel accepted "
+                "it without checking and the client will not connect"
+            )
         if args.flow and created.get("flow") != args.flow:
             print(
                 f"warning: asked for flow {args.flow!r} but the panel stored "
