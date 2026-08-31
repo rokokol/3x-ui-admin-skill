@@ -9,6 +9,7 @@ from . import inbound as inbound_group
 from . import nodes as nodes_group
 from . import panel as panel_group
 from . import routing as routing_group
+from . import sub as sub_group
 
 GROUPS = {
     "nodes": nodes_group,
@@ -18,4 +19,5 @@ GROUPS = {
     "panel": panel_group,
     "db": db_group,
     "routing": routing_group,
+    "sub": sub_group,
 }
