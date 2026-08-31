@@ -53,6 +53,14 @@ carries the safe order for those.
 - `clients/add` takes `{"client": {...}, "inboundIds": [N]}`; `clients/update/{email}`
   takes a **flat** object. The hybrid shape is accepted and silently nulls every
   field not at the top level.
+- **The panel does not answer in the shape it accepts.** Reading a client returns a
+  wrapper (`client`, `inboundIds`, `usedTraffic`, …) around the object; within it
+  `id` is the row's numeric key, while a write expects the client's UUID in that
+  same field, and `allowedIPs` is read as a string but written as a list. Each
+  mismatch is a hard type error from the panel, so a round trip has to convert.
+- Measured on a live panel: an update carrying only `email`, `id` and the field
+  being changed left the client **with an empty flow and disabled**. It still
+  appears in the panel; it simply cannot connect.
 - `clients/add` never sets `flow`. On a Vision inbound it must be passed explicitly.
 - An omitted `enable` on update evaluates to `false` and disables the client.
 - `tgId` is an int64; a string rejects the whole request.

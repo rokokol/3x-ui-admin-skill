@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from . import client as client_group
+from . import client_edit as client_edit_group
 from . import inbound as inbound_group
 from . import nodes as nodes_group
 
@@ -10,4 +11,5 @@ GROUPS = {
     "nodes": nodes_group,
     "inbound": inbound_group,
     "client": client_group,
+    "client-edit": client_edit_group,
 }
