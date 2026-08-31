@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 from .. import render
+from ..inbound_checks import check_inbound
 
 help = "inspect and edit inbounds"
 
@@ -20,6 +21,9 @@ def register(parser) -> None:
 
     settings = sub.add_parser("settings", help="decoded stream settings of one inbound")
     settings.add_argument("id", type=int)
+
+    validate = sub.add_parser("validate", help="check inbounds for silent misconfiguration")
+    validate.add_argument("id", nargs="?", type=int, help="one inbound, or omit for all")
 
 
 def _decode(value):
@@ -75,6 +79,25 @@ def run(args, client) -> int:
             "sniffing": _decode(item.get("sniffing")),
         }
         print(render.dumps(decoded, args.reveal))
+        return 0
+
+    if args.command == "validate":
+        if args.id:
+            inbounds = [client.get(f"inbounds/get/{args.id}")]
+        else:
+            inbounds = client.get("inbounds/list") or []
+        problems, notes = [], []
+        for item in inbounds:
+            found, seen = check_inbound(item)
+            problems.extend(found)
+            notes.extend(seen)
+        for note in notes:
+            print(f"note: {note}")
+        if problems:
+            for problem in problems:
+                print(f"FAIL {problem}")
+            return 1
+        print(f"ok: {len(inbounds)} inbound(s), nothing silently misconfigured")
         return 0
 
     print(f"unknown command: {args.command}")
