@@ -58,6 +58,14 @@ TLS verification is off by default because panels routinely present a certificat
 ./xui client-edit add bob --inbound 1 --flow xtls-rprx-vision
 ./xui client-edit del bob --yes
 
+./xui inbound validate                     # settings stored but never applied
+./xui routing show                         # the rule chain, in order
+./xui routing check                        # failures that leave no trace
+./xui sub settings                         # where subscriptions are served
+./xui sub check                            # is the subscription service coherent
+./xui sub links -o links.txt               # export links to a 0600 file
+./xui db pull                              # sanitised copy of the database
+
 ./xui panel list sub                       # settings matching a pattern
 ./xui panel get subPath                    # one setting, with its consequences
 ./xui panel set subTitle='My VPN'
