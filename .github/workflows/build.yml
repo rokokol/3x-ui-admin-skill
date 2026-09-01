@@ -1,0 +1,48 @@
+name: build
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+  # Automation verifies branches by calling this workflow against a ref — the
+  # real checks, never a copy of their commands that drifts apart
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  offline:
+    name: Tests, falsification, secret gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+
+      # Everything is stdlib-only on the runner's Python; anything that would
+      # reach a registry mid-job is a behavior change with no commit behind it
+      - name: CI tools come from the repo, not the registry
+        run: |
+          if grep -rEn 'pip +install |npx +[a-z@.-]|nix (run|shell) nixpkgs#' .github/workflows; then
+            echo "unpinned registry lookup in a workflow" >&2
+            exit 1
+          fi
+
+      - name: Unit tests
+        run: python3 -m unittest discover -s tests -v
+
+      # Proves the suite would fail if the code broke — a green suite that
+      # cannot go red is not evidence
+      - name: Falsification harness
+        run: python3 tests/falsify.py
+
+      - name: Secret gate
+        run: ./tests/no-secrets.sh

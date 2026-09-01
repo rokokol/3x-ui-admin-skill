@@ -1,0 +1,28 @@
+name: integration
+
+# A detector, not a gate: the job pulls a pinned image from ghcr, so its
+# failure can indict that registry's afternoon rather than anyone's change.
+# It runs on push, weekly and by hand — never on pull requests — and the
+# weekly run is the drift alarm for the world around the pin
+on:
+  push:
+    branches: [master, main]
+  schedule:
+    - cron: "20 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  panel:
+    name: Integration against a real panel
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      # Starts its own pinned 3x-ui in docker and mints its own token,
+      # so it needs no secrets and cannot touch a real panel
+      - name: Integration tests
+        run: python3 tests/integration.py

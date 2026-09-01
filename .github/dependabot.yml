@@ -1,0 +1,7 @@
+# The action pins move by reviewed pull request, never by surprise
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

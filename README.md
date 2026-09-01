@@ -1,5 +1,8 @@
 # 3x-ui-admin-skill
 
+[![build](https://github.com/rokokol/3x-ui-admin-skill/actions/workflows/build.yml/badge.svg)](https://github.com/rokokol/3x-ui-admin-skill/actions/workflows/build.yml)
+[![integration](https://github.com/rokokol/3x-ui-admin-skill/actions/workflows/integration.yml/badge.svg)](https://github.com/rokokol/3x-ui-admin-skill/actions/workflows/integration.yml)
+
 Administer a [3x-ui](https://github.com/MHSanaei/3x-ui) panel from the command line, over its HTTP API. Works as a plain CLI and as a Claude Code skill.
 
 The panel's own web UI is fine for one change at a time. This exists for the rest: editing objects without silently resetting the fields you did not mention, auditing a configuration against the mistakes the API makes easy, checking that a master-to-node link still authenticates what it claims to, and answering "which client stopped connecting" without clicking through pages.
