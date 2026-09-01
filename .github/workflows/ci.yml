@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  offline:
+    name: Tests, falsification, secret gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Everything is stdlib-only; the runner's Python (3.12) is enough
+      - name: Unit tests
+        run: python3 -m unittest discover -s tests -v
+
+      # Proves the suite would fail if the code broke — a green suite that
+      # cannot go red is not evidence
+      - name: Falsification harness
+        run: python3 tests/falsify.py
+
+      - name: Secret gate
+        run: ./tests/no-secrets.sh
+
+  integration:
+    name: Integration against a real panel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Starts its own pinned 3x-ui in docker and mints its own token,
+      # so it needs no secrets and cannot touch a real panel
+      - name: Integration tests
+        run: python3 tests/integration.py
