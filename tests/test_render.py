@@ -24,10 +24,10 @@ class TestSecretFields(unittest.TestCase):
     def test_credential_fields_do_not_survive(self):
         obj = {
             "id": UUID,
-            "password": "hunter2hunter2",
+            "password": "test-hunter2hunter2",
             "subId": "subscription-id-value",
             "privateKey": KEY,
-            "secret": "panelsecret",
+            "secret": "test-panelsecret",
             "auth": "authvalue",
         }
         out = json.dumps(render.redact(obj))
