@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from lib.inbound_checks import check_inbound  # noqa: E402
+from lib.inbound_checks import check_inbound
 
 
 def reality_inbound(**overrides) -> dict:

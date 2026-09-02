@@ -40,6 +40,20 @@ if git grep -nIE '^[[:space:]]*"?(token|password|secret|authkey|api_key)"?[[:spa
     report "literal secret assignment"
 fi
 
+# The same, unquoted: an env assignment or a shell snippet in a doc
+if git grep -nIE '^[[:space:]]*(export[[:space:]]+)?(XUI_TOKEN|XUI_PIN_SHA256|TOKEN|PASSWORD|SECRET)=[A-Za-z0-9+/_=-]{16,}' \
+    -- "${tracked[@]}" | grep -vE '(replace-me|example|CHANGEME|YOUR_|\.\.\.|…|\{\{)' >&2; then
+    report "unquoted secret assignment"
+fi
+
+# A panel URL is a secret as soon as it carries a real host and a base path.
+# Examples use a reserved name or loopback; anything else is somebody's panel
+if git grep -nIoE 'https?://[A-Za-z0-9.-]+(:[0-9]+)?/[A-Za-z0-9_-]{4,}' -- "${tracked[@]}" \
+    | grep -vE '://(host|panel\.example|example\.com|[a-z0-9.-]*\.example|localhost|127\.0\.0\.1|github\.com|img\.shields\.io|fonts\.googleapis\.com|claude\.ai)(:|/)' \
+    | grep -vE 'panel/api|/sub/|/json/' >&2; then
+    report "a URL that looks like a real panel address"
+fi
+
 # secrets/ holds the panel token and URL; none of it belongs in git at all
 if git ls-files | grep -qE '^secrets/'; then
     report "a file under secrets/ is tracked; that directory is the credential store"

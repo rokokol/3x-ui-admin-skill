@@ -52,18 +52,20 @@ As a Claude Code skill, clone or symlink the directory into `~/.claude/skills/`,
 
 ## Configuration
 
-| Source | URL | Token |
-| --- | --- | --- |
-| flags | `--url` | `--token-file` |
-| environment | `XUI_URL` | `XUI_TOKEN` |
-| files | `secrets/url` | `secrets/token` |
-| node registry | `panel` in `$XUI_NODES_DIR/<node>.toml` | `token` or `token_file` there |
+| Source | URL | Token | Certificate pin |
+| --- | --- | --- | --- |
+| flags | `--url` | `--token-file` | `--pin-sha256` |
+| environment | `XUI_URL` | `XUI_TOKEN` | `XUI_PIN_SHA256` |
+| files | `secrets/url` | `secrets/token` | `secrets/pin` |
+| node registry | `panel` in `$XUI_NODES_DIR/<node>.toml` | `token` or `token_file` there | `pin_sha256` there |
 
-`--node NAME` selects a panel from the registry — a directory holding one TOML per node, shareable with whatever manages the machines. Registry files must not be readable beyond their owner
+`--node NAME` selects a panel from the registry — a directory holding one TOML per node, shareable with whatever manages the machines. Registry files must not be readable beyond their owner. A node's URL and token come from the node and nowhere else (its TOML, or `secrets/url.NAME` and `secrets/token.NAME`): an `XUI_URL` left exported in the shell cannot pair the node's token with some other panel's address. Explicit flags still win
 
 The URL includes the base path: the panel serves its API under the same secret prefix as its UI, so the address looks like `https://host:2053/abc123`
 
-TLS verification is off by default because panels routinely present a certificate for a name they are not reached by. Turn it on with `--verify-tls` once the certificate does match
+TLS verification is off by default because panels routinely present a certificate for a name they are not reached by. That leaves the link authenticated by nothing, so there are two ways to make it mean something: `--verify-tls` once the certificate does match, or a pin. `./xui panel cert` prints the sha256 of the certificate the panel presents; put it in `secrets/pin` (or `pin_sha256` in the node's TOML) and every later connection is refused unless the certificate matches it
+
+A plain `http://` URL to anything but loopback is refused, because the token would travel in clear text. `--allow-plaintext` (or `allow_plaintext = true` in a node's TOML) overrides that for a network you trust, such as a tunnel. Redirects are never followed
 
 ## Usage
 
@@ -89,6 +91,7 @@ TLS verification is off by default because panels routinely present a certificat
 ./xui inbound validate                     # settings stored but never applied
 ./xui routing show                         # the rule chain, in order
 ./xui routing check                        # failures that leave no trace
+./xui routing check --tailnet 10.8.0.0/16  # the range the private block must name ('none' to skip)
 ./xui sub settings                         # where subscriptions are served
 ./xui sub check                            # is the subscription service coherent
 ./xui sub links -o links.txt               # export links to a 0600 file
@@ -97,13 +100,16 @@ TLS verification is off by default because panels routinely present a certificat
 ./xui panel list sub                       # settings matching a pattern
 ./xui panel get subPath                    # one setting, with its consequences
 ./xui panel set subTitle='My VPN'
+./xui panel cert                           # sha256 of the certificate the panel presents
 ```
 
-Add `--json` for machine-readable output and `--reveal` to print credentials in full. Worked sequences for the common jobs live in [docs/recipes.md](docs/recipes.md)
+Add `--json` for machine-readable output and `--reveal` to print credentials in full; both are accepted anywhere on the line. Worked sequences for the common jobs live in [docs/recipes.md](docs/recipes.md)
 
 ## Safety
 
-Credentials are masked in every output by default, and client labels are partially masked because in a private fleet they hold real names
+Credentials are masked in every output by default — at most a sixth of a value shows, so a UUID keeps a recognisable prefix while a short password shows one character — and client labels are partially masked because in a private fleet they hold real names. Inline TLS keys and the `pass` of a socks or http account are credentials too, whatever the panel calls them
+
+The sanitised database copy is checked three ways before it is written: the columns the scrub knows about must be empty, every credential value read out of the original must be absent from the bytes of the copy, and no cell anywhere may still have the shape of a key. A copy that fails any of these is not written
 
 When a rollback cannot restore a field, that is stated rather than glossed over. Settings that break already-distributed subscription links, or that can leave the panel unreachable, require `--i-understand`
 

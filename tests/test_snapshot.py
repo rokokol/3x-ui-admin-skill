@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from lib.snapshot import MutationError, apply_and_verify, diff  # noqa: E402
+from lib.snapshot import MutationError, apply_and_verify, diff
 
 
 class FakePanel:

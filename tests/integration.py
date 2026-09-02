@@ -27,9 +27,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from lib import api, config  # noqa: E402
-from lib.commands import client_edit  # noqa: E402
-from lib.snapshot import MutationError, apply_and_verify  # noqa: E402
+from lib import api, config
+from lib.commands import client_edit
+from lib.commands import db as db_cmd
+from lib.snapshot import apply_and_verify
 
 IMAGE = os.environ.get("XUI_TEST_IMAGE", "ghcr.io/mhsanaei/3x-ui:v3.7.0")
 CONTAINER = os.environ.get("XUI_TEST_CONTAINER", "xui-integration")
@@ -137,9 +138,11 @@ VISION_INBOUND = {
 
 class TestAgainstRealPanel(unittest.TestCase):
     inbound_id: int
+    client: api.Client
 
     @classmethod
     def setUpClass(cls):
+        assert PANEL.client is not None
         cls.client = PANEL.client
         created = cls.client.post("inbounds/add", body=VISION_INBOUND)
         cls.inbound_id = (created or {}).get("id") or cls._find_inbound(cls.client)
@@ -286,6 +289,111 @@ class TestAgainstRealPanel(unittest.TestCase):
 
         problems, _ = check_inbound(broken)
         self.assertTrue(any("quic" in p for p in problems))
+
+    def test_a_label_with_a_question_mark_can_still_be_addressed(self):
+        # The panel refuses `/` and spaces in a label but accepts `?` and `#`.
+        # Unescaped in the path, such a client exists and cannot be reached.
+        email = "it-q?x=1#f"
+        self.addCleanup(self._delete_quoted, email)
+        self._add_client(email)
+        read = client_edit._reader(self.client, email)()
+        self.assertEqual(read["email"], email)
+        applied = apply_and_verify(
+            client_edit._reader(self.client, email),
+            client_edit._writer(self.client, email),
+            {"totalGB": 4096},
+        )
+        self.assertEqual(set(applied.changed), {"totalGB"})
+
+    def _delete_quoted(self, email: str) -> None:
+        try:
+            self.client.post(api.path("clients", "del", email))
+        except api.ApiError:
+            pass
+
+    def test_a_negative_expiry_is_accepted_and_is_not_expired(self):
+        from lib.commands.client import _expiry
+
+        email = "it-delayed"
+        self.addCleanup(self._delete, email)
+        self.client.post(
+            "clients/add",
+            body={
+                "client": {"email": email, "enable": True, "expiryTime": -864_000_000},
+                "inboundIds": [self.inbound_id],
+            },
+        )
+        stored = self._read(email)["expiryTime"]
+        self.assertLess(stored, 0, "the panel no longer stores a delayed start as a negative")
+        self.assertNotEqual(_expiry(stored), "expired")
+
+    def test_a_sanitised_export_carries_none_of_what_the_panel_holds(self):
+        # The whole point of the scrub, against the real schema rather than a
+        # fixture written from memory: everything that identifies or
+        # authenticates anyone is planted, the export is scrubbed, and the
+        # bytes are searched.
+        import sqlite3
+        import tempfile
+        from pathlib import Path
+
+        inline_key_line = "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCintegration"
+        tls_inbound = dict(
+            VISION_INBOUND,
+            remark="integration-tls",
+            port=24445,
+            streamSettings=json.dumps(
+                {
+                    "network": "tcp",
+                    "security": "tls",
+                    "tlsSettings": {
+                        "certificates": [
+                            {
+                                "certificate": ["-----BEGIN CERTIFICATE-----", "MIIC"],
+                                "key": ["-----BEGIN PRIVATE KEY-----", inline_key_line],
+                            }
+                        ]
+                    },
+                }
+            ),
+        )
+        created = self.client.post("inbounds/add", body=tls_inbound)
+        tls_id = (created or {}).get("id")
+        self.assertIsNotNone(tls_id)
+        self.addCleanup(lambda: self.client.post(f"inbounds/del/{tls_id}"))
+
+        email = "it-scrub-Relative"
+        self.addCleanup(self._delete, email)
+        self._add_client(email)
+        uuid = self._read(email)["uuid"]
+
+        raw = self.client.download("server/getDb")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "x-ui.db"
+            path.write_bytes(raw)
+            connection = sqlite3.connect(path)
+            try:
+                (admin_hash,) = connection.execute("SELECT password FROM users LIMIT 1").fetchone()
+                (token_hash,) = connection.execute("SELECT token FROM api_tokens LIMIT 1").fetchone()
+                columns = {row[1] for row in connection.execute("PRAGMA table_info(clients)")}
+            finally:
+                connection.close()
+            # The lists in db.py were written against this schema; the moment a
+            # column they name is gone, the scrub silently does less.
+            self.assertTrue(
+                {"wg_private_key", "wg_pre_shared_key", "uuid", "sub_id"} <= columns,
+                f"clients schema moved: {sorted(columns)}",
+            )
+
+            credentials = db_cmd.collect_credentials(path)
+            for planted in (uuid, admin_hash, token_hash, inline_key_line):
+                self.assertIn(planted, credentials, "the scrub does not know about this value")
+            db_cmd.sanitise(path)
+            problems = db_cmd.verify_sanitised(path, credentials)
+            self.assertEqual(problems, [], "the check found something on the real schema")
+
+            blob = path.read_bytes()
+            for planted in (uuid, admin_hash, token_hash, inline_key_line, "it-scrub-Relative"):
+                self.assertNotIn(planted.encode(), blob, f"{planted[:12]}… survived the scrub")
 
     def test_settings_round_trip_without_losing_the_rest(self):
         from lib.commands import panel as panel_cmd

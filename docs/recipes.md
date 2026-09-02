@@ -71,6 +71,20 @@ Tunnel addresses must be unique within one inbound: a peer is addressed by its t
 
 None of these failures announce themselves in the panel: the configuration stays valid and the traffic goes somewhere else.
 
+## Pin the panel's certificate
+
+Verification off means the token goes to whoever answers on that address. A pin fixes that without needing a certificate that matches a name:
+
+```sh
+./xui panel cert                              # prints sha256:…, the certificate presented right now
+printf '%s' '<the hex>' > secrets/pin && chmod 600 secrets/pin
+./xui inbound list                            # refused from now on if the certificate changes
+```
+
+Take the fingerprint over a path you already trust — the first connection from the machine the panel was set up from, or out-of-band from the host with `openssl x509 -in cert.pem -noout -fingerprint -sha256`. A renewed certificate changes the fingerprint, so a renewal is followed by a new pin; the refusal message shows the fingerprint that was seen.
+
+For a node in the registry, put `pin_sha256 = "…"` in its TOML instead.
+
 ## Take a copy of the database
 
 ```sh
