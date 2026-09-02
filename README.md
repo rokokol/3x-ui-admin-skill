@@ -65,6 +65,17 @@ The URL includes the base path: the panel serves its API under the same secret p
 
 TLS verification is off by default because panels routinely present a certificate for a name they are not reached by. That leaves the link authenticated by nothing, so there are two ways to make it mean something: `--verify-tls` once the certificate does match, or a pin. `./xui panel cert` prints the sha256 of the certificate the panel presents; put it in `secrets/pin` (or `pin_sha256` in the node's TOML) and every later connection is refused unless the certificate matches it
 
+A registry file holds, per panel, everything the table above lists plus the two switches; only `panel` is required, and a missing token falls back to `secrets/token.NAME`:
+
+```toml
+# $XUI_NODES_DIR/se-1.toml, mode 600
+panel = "https://100.64.0.9:2053/abc123"
+token_file = "~/.secrets/se-1.token"   # or token = "…"
+pin_sha256 = "3f2a…"                    # optional, from: ./xui panel cert
+verify_tls = false                      # optional
+allow_plaintext = false                 # optional
+```
+
 A plain `http://` URL to anything but loopback is refused, because the token would travel in clear text. `--allow-plaintext` (or `allow_plaintext = true` in a node's TOML) overrides that for a network you trust, such as a tunnel. Redirects are never followed
 
 ## Usage
@@ -91,7 +102,7 @@ A plain `http://` URL to anything but loopback is refused, because the token wou
 ./xui inbound validate                     # settings stored but never applied
 ./xui routing show                         # the rule chain, in order
 ./xui routing check                        # failures that leave no trace
-./xui routing check --tailnet 203.0.113.0/24  # also require a range geoip:private does not cover
+./xui routing check --require-blocked 203.0.113.0/24  # a range geoip:private does not cover
 ./xui sub settings                         # where subscriptions are served
 ./xui sub check                            # is the subscription service coherent
 ./xui sub links -o links.txt               # export links to a 0600 file

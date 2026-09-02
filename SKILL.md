@@ -14,7 +14,7 @@ Resolution order, first hit wins: command-line flags, `XUI_URL` / `XUI_TOKEN`, t
 
 ```bash
 ./xui inbound list                        # from secrets/
-./xui --node se-1 nodes health            # from the registry
+./xui --node se-1 nodes health            # secrets/url.se-1 + token.se-1, or $XUI_NODES_DIR/se-1.toml
 XUI_URL=… XUI_TOKEN=… ./xui client list
 ```
 

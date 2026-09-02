@@ -15,10 +15,10 @@ from ..api import ApiError
 
 help = "routing rules and the invariants that fail quietly"
 
-# geoip:private already covers the carrier-grade range 100.64.0.0/10 (checked
-# against the geoip.dat the pinned panel image ships), so a tailnet needs no
-# rule of its own. --tailnet exists for a range geoip:private does not cover.
-TAILNET = None
+# geoip:private already covers RFC 1918, the carrier-grade range 100.64.0.0/10,
+# loopback and link-local (checked against the geoip.dat the pinned panel image
+# ships). --require-blocked exists for a range it does not cover: a public
+# prefix used internally, say.
 
 # Rules that keep traffic where it is, as opposed to sending it somewhere else.
 LOCAL_TAGS = {"direct", "block", "blocked"}
@@ -42,10 +42,11 @@ def register(parser) -> None:
         help="require direct/blocking rules to precede this outbound tag; repeatable",
     )
     check.add_argument(
-        "--tailnet",
-        default=None,
+        "--require-blocked",
+        action="append",
+        default=[],
         metavar="CIDR",
-        help="a range outside geoip:private that the private block must also name",
+        help="a range geoip:private does not cover that the private block must also name; repeatable",
     )
 
     sub.add_parser("outbounds", help="outbound tags the rules may point at")
@@ -106,7 +107,7 @@ def _ip_list(rule: dict) -> list[str]:
 def check_rules(
     template: dict,
     direct_before: list[str] | None = None,
-    tailnet: str | None = TAILNET,
+    require_blocked: list[str] | None = None,
 ) -> tuple[list[str], list[str]]:
     """Return (problems, notes) for a routing table. Pure, so it can be tested."""
     rules = _rules(template)
@@ -187,13 +188,12 @@ def check_rules(
                 f"rule {rules.index(rule)} sends geoip:private to {target!r}; tunnel "
                 "clients can reach whatever that outbound reaches"
             )
-    if private_blocks and tailnet and tailnet != "none" and not any(
-        tailnet in _ip_list(r) for r in private_blocks
-    ):
-        problems.append(
-            f"the private block omits {tailnet}: a tunnel client reaches whatever "
-            "answers in that range as a trusted peer"
-        )
+    for cidr in require_blocked or []:
+        if not any(cidr in _ip_list(r) for r in private_blocks):
+            problems.append(
+                f"no block names {cidr}: a tunnel client reaches whatever answers "
+                "in that range as a trusted peer"
+            )
 
     # A rule that sends traffic abroad must not sit above the rules that keep
     # local traffic local, or the local ones never fire.
@@ -249,7 +249,7 @@ def run(args, client) -> int:
         return 0
 
     if args.command == "check":
-        problems, notes = check_rules(template, args.direct_before or [], args.tailnet)
+        problems, notes = check_rules(template, args.direct_before or [], args.require_blocked)
         for note in notes:
             print(f"note: {note}")
         if problems:

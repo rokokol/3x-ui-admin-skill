@@ -94,10 +94,10 @@ class TestInvariants(unittest.TestCase):
     def test_a_range_outside_geoip_private_can_be_required(self):
         rules = list(HEALTHY)
         rules[1] = {"outboundTag": "blocked", "ip": ["geoip:private"]}
-        problems, _ = check_rules(template(rules), tailnet="203.0.113.0/24")
+        problems, _ = check_rules(template(rules), require_blocked=["203.0.113.0/24"])
         self.assertTrue(any("203.0.113.0/24" in p for p in problems))
         rules[1] = {"outboundTag": "blocked", "ip": ["geoip:private", "203.0.113.0/24"]}
-        problems, _ = check_rules(template(rules), tailnet="203.0.113.0/24")
+        problems, _ = check_rules(template(rules), require_blocked=["203.0.113.0/24"])
         self.assertEqual(problems, [])
 
     def test_no_private_block_at_all_is_a_note(self):

@@ -110,10 +110,10 @@ DEFECTS = [
         consequence="a rule naming both domain and ip matches nothing and looks correct",
     ),
     Defect(
-        name="routing/tailnet-unchecked",
+        name="routing/required-range-unchecked",
         file="lib/commands/routing.py",
-        find='    if private_blocks and tailnet and tailnet != "none" and not any(',
-        replace="    if False and not any(",
+        find="        if not any(cidr in _ip_list(r) for r in private_blocks):",
+        replace="        if False:",
         consequence="a range the operator asked to see blocked is not checked for",
     ),
     Defect(
