@@ -31,7 +31,7 @@ It runs as a plain CLI and as a Claude Code skill from the same directory — `.
 
 ## Setup
 
-Python 3.11 or newer and nothing else — no third-party packages. Create the token in the panel under **Settings → API tokens** with scope `admin`, then:
+Python 3.11 or newer and nothing else — no third-party packages. Create the token in the panel under **Settings → API tokens** with scope `admin` — or, on a panel that was installed unattended, take the one the installer left in `/etc/x-ui/install-result.env` (see [recovery](docs/recovery.md#you-lost-the-api-token)) — then:
 
 ```bash
 git clone https://github.com/rokokol/3x-ui-admin-skill

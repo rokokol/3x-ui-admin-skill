@@ -4,13 +4,19 @@ Everything this skill does goes through the panel API. These are the situations 
 
 ## You lost the API token
 
-Tokens are stored as a SHA-256 hash, so there is nothing to read back. Mint a replacement on the host:
+Tokens are stored as a SHA-256 hash, so there is nothing to read back from the panel. Before minting one, look at what the installer left behind: a panel installed unattended (cloud-init, or the `skibidi-vpn` roles) writes the token it minted at install time to `/etc/x-ui/install-result.env`, mode 600, under `XUI_API_TOKEN`, next to the first username and password. If that token was never rotated, it is still the one the panel accepts:
+
+```sh
+sudo grep '^XUI_API_TOKEN=' /etc/x-ui/install-result.env
+```
+
+Only if there is no such file, or the value there is refused, mint a replacement on the host:
 
 ```sh
 x-ui setting -getApiToken
 ```
 
-This rotates a single named token rather than accumulating new ones, and prints the new value once. Put it in `secrets/token` immediately; it cannot be recovered a second time.
+This rotates a single named token rather than accumulating new ones, and prints the new value once. Put it in `secrets/token` immediately; it cannot be recovered a second time. Rotation is not free: whoever else held the previous token — another registry, a script on the host — is refused from that moment, so a token issued in the panel's UI under its own name is the better long-term choice, because nothing on the host rotates it.
 
 ## You lost the panel password, or 2FA
 
