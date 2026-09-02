@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import time
 
-from .. import render
+from .. import api, render
 
 help = "clients and their attachments"
 
@@ -42,15 +42,23 @@ def _label(value, reveal: bool) -> str:
 
 def _ms_age_days(value) -> float | None:
     """Panel timestamps are milliseconds; return age in days, None if never."""
-    if not value:
+    if not isinstance(value, (int, float)) or not value:
         return None
     seconds = value / 1000 if value > 10_000_000_000 else value
     return (time.time() - seconds) / 86400
 
 
 def _expiry(value) -> str:
-    if not value:
+    """A negative expiry is a duration that starts at the first connection.
+
+    The panel stores it as minus the number of milliseconds and flips it to a
+    real timestamp the first time the client is seen, so it is not expired: it
+    has not started.
+    """
+    if not isinstance(value, (int, float)) or not value:
         return "never"
+    if value < 0:
+        return f"{-value / 86_400_000:.0f}d after first use"
     seconds = value / 1000 if value > 10_000_000_000 else value
     remaining = seconds - time.time()
     if remaining < 0:
@@ -93,7 +101,7 @@ def run(args, client) -> int:
         return 0
 
     if args.command == "get":
-        item = client.get(f"clients/get/{args.email}")
+        item = client.get(api.path("clients", "get", args.email))
         print(render.dumps(item, args.reveal))
         return 0
 

@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 
 from .. import render
+from ..api import ApiError
 
 help = "routing rules and the invariants that fail quietly"
 
@@ -18,6 +19,10 @@ TAILNET = "100.64.0.0/10"
 
 # Rules that keep traffic where it is, as opposed to sending it somewhere else.
 LOCAL_TAGS = {"direct", "block", "blocked"}
+
+# Outbound tags that drop traffic. An outbound whose protocol is blackhole
+# counts too, whatever it is called.
+BLOCK_TAGS = {"block", "blocked"}
 
 
 def register(parser) -> None:
@@ -33,6 +38,12 @@ def register(parser) -> None:
         metavar="TAG",
         help="require direct/blocking rules to precede this outbound tag; repeatable",
     )
+    check.add_argument(
+        "--tailnet",
+        default=TAILNET,
+        metavar="CIDR",
+        help=f"range the private block must also name (default {TAILNET}; 'none' to skip)",
+    )
 
     sub.add_parser("outbounds", help="outbound tags the rules may point at")
 
@@ -41,13 +52,16 @@ def _template(client) -> dict:
     # The trailing slash is required: the group is registered at "xray/" and the
     # router answers a slashless POST with a 307 that urllib will not follow.
     raw = client.post("xray/")
-    if isinstance(raw, str):
-        raw = json.loads(raw)
-    if isinstance(raw, dict) and "xraySetting" in raw:
-        # Wrapped once more, and the inner value is sometimes an object and
-        # sometimes the same object as text.
-        inner = raw["xraySetting"]
-        return json.loads(inner) if isinstance(inner, str) else inner
+    try:
+        if isinstance(raw, str):
+            raw = json.loads(raw)
+        if isinstance(raw, dict) and "xraySetting" in raw:
+            # Wrapped once more, and the inner value is sometimes an object and
+            # sometimes the same object as text.
+            inner = raw["xraySetting"]
+            return json.loads(inner) if isinstance(inner, str) else inner
+    except json.JSONDecodeError as error:
+        raise ApiError(f"POST xray/: the Xray template is not valid JSON: {error}") from error
     return raw or {}
 
 
@@ -71,7 +85,26 @@ def _summarise(rule: dict) -> str:
     return " ".join(parts) or "(matches everything)"
 
 
-def check_rules(template: dict, direct_before: list[str] | None = None) -> tuple[list[str], list[str]]:
+def _block_tags(template: dict) -> set[str]:
+    tags = set(BLOCK_TAGS)
+    for outbound in template.get("outbounds") or []:
+        if (outbound.get("protocol") or "").lower() == "blackhole" and outbound.get("tag"):
+            tags.add(outbound["tag"])
+    return tags
+
+
+def _ip_list(rule: dict) -> list[str]:
+    value = rule.get("ip") or []
+    if isinstance(value, str):
+        value = [value]
+    return [str(v) for v in value]
+
+
+def check_rules(
+    template: dict,
+    direct_before: list[str] | None = None,
+    tailnet: str | None = TAILNET,
+) -> tuple[list[str], list[str]]:
     """Return (problems, notes) for a routing table. Pure, so it can be tested."""
     rules = _rules(template)
     problems: list[str] = []
@@ -120,13 +153,24 @@ def check_rules(template: dict, direct_before: list[str] | None = None) -> tuple
         )
 
     # Anything inside the tunnel can reach the panel over its tunnel address
-    # unless the private block names the carrier-grade range explicitly.
-    private_rules = [r for r in rules if any("private" in str(v) for v in (r.get("ip") or []))]
-    if not private_rules:
-        problems.append("nothing blocks geoip:private; tunnel clients can reach the panel")
-    elif not any(TAILNET in (r.get("ip") or []) for r in private_rules):
+    # unless a rule drops geoip:private. Naming the range is not enough: a rule
+    # that routes it `direct` is the opposite of a block and looks the same.
+    blocking = _block_tags(template)
+    private_rules = [r for r in rules if any("private" in v for v in _ip_list(r))]
+    private_blocks = [r for r in private_rules if r.get("outboundTag") in blocking]
+    routed = [r for r in private_rules if r.get("outboundTag") not in blocking]
+    for rule in routed:
         problems.append(
-            f"the private block omits {TAILNET}: a tunnel client reaches the panel "
+            f"rule {rules.index(rule)} names geoip:private but sends it to "
+            f"{rule.get('outboundTag') or rule.get('balancerTag')!r}, which does not "
+            "drop traffic; tunnel clients reach the panel and everything beside it"
+        )
+    if not private_blocks:
+        if not routed:
+            problems.append("nothing blocks geoip:private; tunnel clients can reach the panel")
+    elif tailnet and tailnet != "none" and not any(tailnet in _ip_list(r) for r in private_blocks):
+        problems.append(
+            f"the private block omits {tailnet}: a tunnel client reaches the panel "
             "over its tailnet address and enters the tailnet as a trusted peer"
         )
 
@@ -184,7 +228,7 @@ def run(args, client) -> int:
         return 0
 
     if args.command == "check":
-        problems, notes = check_rules(template, args.direct_before or [])
+        problems, notes = check_rules(template, args.direct_before or [], args.tailnet)
         for note in notes:
             print(f"note: {note}")
         if problems:

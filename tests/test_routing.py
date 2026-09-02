@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from lib.commands.routing import check_rules  # noqa: E402
+from lib.commands.routing import check_rules
 
 OUTBOUNDS = [{"tag": "direct"}, {"tag": "blocked"}, {"tag": "to-se"}]
 
@@ -59,6 +59,31 @@ class TestInvariants(unittest.TestCase):
     def test_private_block_without_the_tailnet_range(self):
         rules = list(HEALTHY)
         rules[1] = {"outboundTag": "blocked", "ip": ["geoip:private"]}
+        problems, _ = check_rules(template(rules))
+        self.assertTrue(any("100.64.0.0/10" in p for p in problems))
+
+    def test_private_range_routed_direct_is_not_a_block(self):
+        # The rule names geoip:private, so a check that only looks for the
+        # name passes it. It sends the traffic on, which is the opposite.
+        rules = list(HEALTHY)
+        rules[1] = {"outboundTag": "direct", "ip": ["geoip:private", "100.64.0.0/10"]}
+        problems, _ = check_rules(template(rules))
+        self.assertTrue(any("does not drop traffic" in p for p in problems), problems)
+
+    def test_a_blackhole_outbound_counts_as_a_block_whatever_its_tag(self):
+        rules = list(HEALTHY)
+        rules[1] = {"outboundTag": "sink", "ip": ["geoip:private", "100.64.0.0/10"]}
+        outbounds = OUTBOUNDS + [{"tag": "sink", "protocol": "blackhole"}]
+        problems, _ = check_rules(template(rules, outbounds))
+        self.assertEqual(problems, [])
+
+    def test_tailnet_requirement_can_be_changed_or_dropped(self):
+        rules = list(HEALTHY)
+        rules[1] = {"outboundTag": "blocked", "ip": ["geoip:private", "10.8.0.0/16"]}
+        problems, _ = check_rules(template(rules), tailnet="10.8.0.0/16")
+        self.assertEqual(problems, [])
+        problems, _ = check_rules(template(rules), tailnet="none")
+        self.assertEqual(problems, [])
         problems, _ = check_rules(template(rules))
         self.assertTrue(any("100.64.0.0/10" in p for p in problems))
 

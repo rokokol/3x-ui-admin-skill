@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from .. import render
+from .. import api, render
 
 help = "subscription links and their settings"
 
@@ -38,7 +38,7 @@ def _sub_settings(client) -> dict:
 
 
 def _links_for(client, email: str) -> list[str]:
-    result = client.get(f"clients/links/{email}")
+    result = client.get(api.path("clients", "links", email))
     if isinstance(result, list):
         return [str(item) for item in result]
     if isinstance(result, str):
@@ -133,7 +133,12 @@ def run(args, client) -> int:
             destination = Path(args.out)
             # Created 600 before anything is written: a link is a credential, and
             # a default-umask file would be readable by the whole machine first.
-            handle = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            # The mode argument only applies to a file being created, so an
+            # existing one is tightened explicitly; and a symlink is refused, or
+            # the links would land wherever it points.
+            flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0)
+            handle = os.open(destination, flags, 0o600)
+            os.fchmod(handle, 0o600)
             with os.fdopen(handle, "w", encoding="utf-8") as stream:
                 for email, links in collected:
                     stream.write(f"# {email}\n")

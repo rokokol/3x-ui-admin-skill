@@ -9,7 +9,7 @@ fields where it expects them, and stores their zero values instead.
 
 from __future__ import annotations
 
-from .. import render, snapshot
+from .. import api, render, snapshot
 
 help = "create, edit and delete clients"
 
@@ -51,7 +51,7 @@ def _coerce(name: str, raw: str):
 
 def _reader(client, email: str):
     def read() -> dict:
-        wrapper = client.get(f"clients/get/{email}")
+        wrapper = client.get(api.path("clients", "get", email))
         if not isinstance(wrapper, dict) or "client" not in wrapper:
             raise snapshot.MutationError(
                 f"unexpected shape for client {email!r}: {sorted(wrapper)[:6]}"
@@ -88,7 +88,7 @@ def _for_write(obj: dict) -> dict:
 def _writer(client, email: str):
     def write(obj: dict) -> None:
         # Flat, whole, every time: the endpoint replaces the record.
-        client.post(f"clients/update/{email}", body=_for_write(obj))
+        client.post(api.path("clients", "update", email), body=_for_write(obj))
 
     return write
 
@@ -210,10 +210,8 @@ def run(args, client) -> int:
             print(f"about to delete client {args.email!r} and its traffic rows.")
             print("re-run with --yes to proceed.")
             return 2
-        path = f"clients/del/{args.email}"
-        if args.keep_traffic:
-            path += "?keepTraffic=1"
-        client.post(path)
+        query = {"keepTraffic": "1"} if args.keep_traffic else None
+        client.post(api.path("clients", "del", args.email), query=query)
         print(f"deleted {args.email}")
         return 0
 

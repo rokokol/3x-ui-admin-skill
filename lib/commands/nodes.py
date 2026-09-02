@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import ipaddress
 import time
+from datetime import datetime, timezone
 
 from .. import render
+from ..api import strip_paths
 
 help = "master to node links"
 
@@ -55,12 +57,32 @@ def register(parser) -> None:
     registry.set_defaults(needs_panel=False)
 
 
-def _heartbeat_age(node: dict) -> float | None:
-    beat = node.get("lastHeartbeat") or node.get("last_heartbeat")
-    if not beat:
+def _epoch_seconds(value) -> float | None:
+    """A timestamp as the panel might spell it: ms, s, or an RFC 3339 string."""
+    if isinstance(value, bool) or not value:
         return None
-    # The panel stores milliseconds; a value in seconds would be some time in 1970.
-    seconds = beat / 1000 if beat > 10_000_000_000 else beat
+    if isinstance(value, (int, float)):
+        # The panel stores milliseconds; a value in seconds would be some
+        # time in 1970.
+        return value / 1000 if value > 10_000_000_000 else float(value)
+    if isinstance(value, str):
+        text = value.strip()
+        if text.isdigit():
+            return _epoch_seconds(int(text))
+        try:
+            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.timestamp()
+    return None
+
+
+def _heartbeat_age(node: dict) -> float | None:
+    seconds = _epoch_seconds(node.get("lastHeartbeat") or node.get("last_heartbeat"))
+    if seconds is None:
+        return None
     return max(0.0, time.time() - seconds)
 
 
@@ -123,7 +145,7 @@ def run(args, client) -> int:
                     "xray": n.get("xrayVersion") or n.get("xray_version"),
                     "cpu": _pct(n.get("cpuPct") or n.get("cpu_pct")),
                     "mem": _pct(n.get("memPct") or n.get("mem_pct")),
-                    "error": (n.get("lastError") or n.get("last_error") or "")[:40],
+                    "error": strip_paths(str(n.get("lastError") or n.get("last_error") or ""))[:40],
                 }
             )
         if args.json:
