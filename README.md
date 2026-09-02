@@ -120,7 +120,7 @@ python3 -m unittest discover -s tests    # offline, no panel needed
 python3 tests/integration.py             # against a real panel in a container
 python3 tests/falsify.py                 # break each guard, require the tests to notice
 tests/no-secrets.sh                      # nothing credential-shaped is tracked
-ruff check . && pyright                  # the lint job, with the rule set from ruff.toml
+ruff check . && pyright                  # the lint job, same pinned versions as CI
 ```
 
 The falsification harness edits one line of the implementation at a time — removes the verification step, blinds a check, skips the scrub — and reruns the suite. A defect reported as `SURVIVED` means nothing fails when that behaviour is broken, which is the only honest way to know the tests are worth running. It found two blind spots on its first run: the sanitiser's journal-mode fix and masking, neither of which had a test at all

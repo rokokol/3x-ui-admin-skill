@@ -64,13 +64,23 @@ class TestInvariants(unittest.TestCase):
         problems, _ = check_rules(template(rules))
         self.assertEqual(problems, [])
 
-    def test_private_range_routed_direct_is_not_a_block(self):
+    def test_private_range_routed_somewhere_is_a_note_not_a_block(self):
         # The rule names geoip:private, so a check that only looks for the
-        # name passes it. It sends the traffic on, which is the opposite.
+        # name would call it a block. It sends the traffic on, which may be
+        # deliberate, so it is shown rather than failed.
         rules = list(HEALTHY)
         rules[1] = {"outboundTag": "direct", "ip": ["geoip:private", "100.64.0.0/10"]}
+        problems, notes = check_rules(template(rules))
+        self.assertEqual(problems, [])
+        self.assertTrue(any("sends geoip:private to 'direct'" in n for n in notes), notes)
+
+    def test_private_rule_with_no_outbound_is_a_problem(self):
+        # Not a block anyone wrote: Xray drops the connection with a warning,
+        # and older cores routed it to the first outbound.
+        rules = list(HEALTHY)
+        rules[1] = {"outboundTag": "", "ip": ["geoip:private"]}
         problems, _ = check_rules(template(rules))
-        self.assertTrue(any("does not drop traffic" in p for p in problems), problems)
+        self.assertTrue(any("no outbound at all" in p for p in problems), problems)
 
     def test_a_blackhole_outbound_counts_as_a_block_whatever_its_tag(self):
         rules = list(HEALTHY)

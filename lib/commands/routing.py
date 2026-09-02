@@ -161,17 +161,29 @@ def check_rules(
     blocking = _block_tags(template)
     private_rules = [r for r in rules if any("private" in v for v in _ip_list(r))]
     private_blocks = [r for r in private_rules if r.get("outboundTag") in blocking]
-    routed = [r for r in private_rules if r.get("outboundTag") not in blocking]
+    routed = [r for r in private_rules if r not in private_blocks]
+    if not private_rules:
+        problems.append("nothing blocks geoip:private; tunnel clients can reach the panel")
     for rule in routed:
-        problems.append(
-            f"rule {rules.index(rule)} names geoip:private but sends it to "
-            f"{rule.get('outboundTag') or rule.get('balancerTag')!r}, which does not "
-            "drop traffic; tunnel clients reach the panel and everything beside it"
-        )
-    if not private_blocks:
-        if not routed:
-            problems.append("nothing blocks geoip:private; tunnel clients can reach the panel")
-    elif tailnet and tailnet != "none" and not any(tailnet in _ip_list(r) for r in private_blocks):
+        target = rule.get("outboundTag") or rule.get("balancerTag")
+        if not target:
+            # Xray closes the connection with "non existing outTag" logged once
+            # per attempt; older cores sent it to the first outbound instead.
+            # Either way it is not a block anyone wrote down.
+            problems.append(
+                f"rule {rules.index(rule)} names geoip:private but no outbound at all; "
+                "Xray drops each connection with a warning rather than by design"
+            )
+        else:
+            # Explicit, so presumably deliberate - an intranet reachable through
+            # the tunnel, say. Worth seeing, not worth failing.
+            notes.append(
+                f"rule {rules.index(rule)} sends geoip:private to {target!r}; tunnel "
+                "clients can reach whatever that outbound reaches"
+            )
+    if private_blocks and tailnet and tailnet != "none" and not any(
+        tailnet in _ip_list(r) for r in private_blocks
+    ):
         problems.append(
             f"the private block omits {tailnet}: a tunnel client reaches whatever "
             "answers in that range as a trusted peer"

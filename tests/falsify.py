@@ -112,8 +112,8 @@ DEFECTS = [
     Defect(
         name="routing/tailnet-unchecked",
         file="lib/commands/routing.py",
-        find='    elif tailnet and tailnet != "none" and not any(tailnet in _ip_list(r) for r in private_blocks):',
-        replace="    elif False:",
+        find='    if private_blocks and tailnet and tailnet != "none" and not any(',
+        replace="    if False and not any(",
         consequence="a range the operator asked to see blocked is not checked for",
     ),
     Defect(
@@ -243,11 +243,11 @@ DEFECTS = [
         consequence="a client whose label holds ? or # cannot be read, edited or deleted",
     ),
     Defect(
-        name="routing/private-routed-direct-passes",
+        name="routing/private-routed-unreported",
         file="lib/commands/routing.py",
         find="    for rule in routed:",
         replace="    for rule in []:",
-        consequence="a rule that routes private ranges direct is accepted as a block",
+        consequence="a rule that sends private ranges on, or nowhere, passes without a word",
     ),
     Defect(
         name="client/negative-expiry-is-expired",
