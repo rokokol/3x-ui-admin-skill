@@ -117,6 +117,13 @@ DEFECTS = [
         consequence="a range the operator asked to see blocked is not checked for",
     ),
     Defect(
+        name="routing/empty-outbound-unchecked",
+        file="lib/commands/routing.py",
+        find="        if not target:\n            # Xray closes",
+        replace="        if False:\n            # Xray closes",
+        consequence="a rule with no outbound, which drops every connection it matches, passes",
+    ),
+    Defect(
         name="routing/api-position-unchecked",
         file="lib/commands/routing.py",
         find="    elif api_index != 0:",
@@ -245,9 +252,9 @@ DEFECTS = [
     Defect(
         name="routing/private-routed-unreported",
         file="lib/commands/routing.py",
-        find="    for rule in routed:",
+        find="    for rule in private_rules:",
         replace="    for rule in []:",
-        consequence="a rule that sends private ranges on, or nowhere, passes without a word",
+        consequence="a rule that sends private ranges on passes without a word",
     ),
     Defect(
         name="client/negative-expiry-is-expired",

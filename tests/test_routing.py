@@ -74,13 +74,15 @@ class TestInvariants(unittest.TestCase):
         self.assertEqual(problems, [])
         self.assertTrue(any("sends geoip:private to 'direct'" in n for n in notes), notes)
 
-    def test_private_rule_with_no_outbound_is_a_problem(self):
+    def test_any_rule_with_no_outbound_is_a_problem(self):
         # Not a block anyone wrote: Xray drops the connection with a warning,
-        # and older cores routed it to the first outbound.
+        # and older cores routed it to the first outbound. True of every rule,
+        # not only the private one.
         rules = list(HEALTHY)
         rules[1] = {"outboundTag": "", "ip": ["geoip:private"]}
+        rules[3] = {"ip": ["geoip:ru"]}
         problems, _ = check_rules(template(rules))
-        self.assertTrue(any("no outbound at all" in p for p in problems), problems)
+        self.assertEqual(sum("names no outbound" in p for p in problems), 2, problems)
 
     def test_a_blackhole_outbound_counts_as_a_block_whatever_its_tag(self):
         rules = list(HEALTHY)
@@ -98,10 +100,13 @@ class TestInvariants(unittest.TestCase):
         problems, _ = check_rules(template(rules), tailnet="203.0.113.0/24")
         self.assertEqual(problems, [])
 
-    def test_no_private_block_at_all(self):
+    def test_no_private_block_at_all_is_a_note(self):
+        # Removing the template's block may be what the operator wants; it is
+        # shown with its consequence, not failed.
         rules = [r for r in HEALTHY if "geoip:private" not in (r.get("ip") or [])]
-        problems, _ = check_rules(template(rules))
-        self.assertTrue(any("geoip:private" in p for p in problems))
+        problems, notes = check_rules(template(rules))
+        self.assertEqual(problems, [])
+        self.assertTrue(any("no rule mentions geoip:private" in n for n in notes), notes)
 
     def test_rule_pointing_at_an_undeclared_outbound(self):
         rules = list(HEALTHY)

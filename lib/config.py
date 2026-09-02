@@ -94,21 +94,21 @@ def _registry_dir() -> Path | None:
 
 
 def _load_node(name: str) -> dict:
-    """Read one node's TOML from the registry.
+    """Read one node's TOML from the registry, if there is one.
 
     The registry is the skill's own format: a directory of `<name>.toml` files
     that whatever manages the machines may also write, or nothing else touches.
+    A name with no TOML behind it is still a name: `secrets/url.<name>` and
+    `secrets/token.<name>` describe a second panel without any registry.
     """
-    if tomllib is None:
-        raise ConfigError("reading the node registry needs Python 3.11 or newer")
     directory = _registry_dir()
     if directory is None:
-        raise ConfigError(
-            f"node {name!r} requested but XUI_NODES_DIR is not set"
-        )
+        return {}
     path = directory / f"{name}.toml"
     if not path.is_file():
-        raise ConfigError(f"no such node in the registry: {path}")
+        return {}
+    if tomllib is None:
+        raise ConfigError("reading the node registry needs Python 3.11 or newer")
     mode = path.stat().st_mode
     if mode & (stat.S_IRWXG | stat.S_IRWXO):
         raise ConfigError(f"{path} is group or world readable; run: chmod 600 {path}")
@@ -233,8 +233,8 @@ def resolve(
     if not resolved_url:
         if node:
             raise ConfigError(
-                f"no panel URL for node {node!r}: set `panel` in its TOML, "
-                f"write secrets/url.{node}, or pass --url"
+                f"no panel URL for {node!r}: write secrets/url.{node}, set `panel` "
+                f"in $XUI_NODES_DIR/{node}.toml, or pass --url"
             )
         raise ConfigError(
             "no panel URL: pass --url, set XUI_URL, write secrets/url, "
@@ -243,8 +243,8 @@ def resolve(
     if not resolved_token:
         if node:
             raise ConfigError(
-                f"no API token for node {node!r}: set `token` or `token_file` "
-                f"in its TOML, write secrets/token.{node}, or pass --token-file"
+                f"no API token for {node!r}: write secrets/token.{node}, set `token` "
+                f"or `token_file` in $XUI_NODES_DIR/{node}.toml, or pass --token-file"
             )
         raise ConfigError(
             "no API token: pass --token-file, set XUI_TOKEN, or write secrets/token"

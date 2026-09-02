@@ -87,6 +87,21 @@ class TestNodeIsolation(Registry):
         panel = config.resolve(node="se-1")
         self.assertEqual(panel.token, "node-token")
 
+    def test_a_second_panel_needs_no_registry_at_all(self):
+        # secrets/url.NAME and secrets/token.NAME are enough to name a panel.
+        os.environ.pop("XUI_NODES_DIR", None)
+        self.secret("url.home", "https://home.example:2053/base")
+        self.secret("token.home", "home-token")
+        panel = config.resolve(node="home")
+        self.assertEqual(panel.url, "https://home.example:2053/base")
+        self.assertEqual(panel.token, "home-token")
+        self.assertEqual(panel.name, "home")
+
+    def test_an_unknown_name_says_where_to_put_it(self):
+        with self.assertRaises(config.ConfigError) as caught:
+            config.resolve(node="nowhere")
+        self.assertIn("secrets/url.nowhere", str(caught.exception))
+
     def test_explicit_flags_win_even_for_a_node(self):
         self.node("se-1", 'panel = "https://se-1.example/base"\ntoken = "node-token"\n')
         panel = config.resolve(node="se-1", url="https://typed.example/base")

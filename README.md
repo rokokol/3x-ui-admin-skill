@@ -59,7 +59,7 @@ As a Claude Code skill, clone or symlink the directory into `~/.claude/skills/`,
 | files | `secrets/url` | `secrets/token` | `secrets/pin` |
 | node registry | `panel` in `$XUI_NODES_DIR/<node>.toml` | `token` or `token_file` there | `pin_sha256` there |
 
-`--node NAME` selects a panel from the registry — a directory holding one TOML per node, shareable with whatever manages the machines. Registry files must not be readable beyond their owner. A node's URL and token come from the node and nowhere else (its TOML, or `secrets/url.NAME` and `secrets/token.NAME`): an `XUI_URL` left exported in the shell cannot pair the node's token with some other panel's address. Explicit flags still win
+`--node NAME` selects another panel. The simplest form needs no registry: `secrets/url.NAME` and `secrets/token.NAME` beside the default pair. The registry — `$XUI_NODES_DIR`, one TOML per panel, shareable with whatever manages the machines — is for a fleet, and its files must not be readable beyond their owner. A node's URL and token come from the node and nowhere else (its TOML, or `secrets/url.NAME` and `secrets/token.NAME`): an `XUI_URL` left exported in the shell cannot pair the node's token with some other panel's address. Explicit flags still win
 
 The URL includes the base path: the panel serves its API under the same secret prefix as its UI, so the address looks like `https://host:2053/abc123`
 

@@ -125,7 +125,15 @@ def check_rules(
     known.add("api")
     for index, rule in enumerate(rules):
         target = rule.get("outboundTag") or rule.get("balancerTag")
-        if target and target not in known:
+        if not target:
+            # Xray closes each matching connection with "non existing outTag"
+            # logged; older cores sent it to the first outbound instead.
+            # Whatever the rule meant, that is not it.
+            problems.append(
+                f"rule {index} names no outbound; Xray drops what it matches, with a "
+                "warning per connection"
+            )
+        elif target not in known:
             problems.append(f"rule {index} points at {target!r}, which no outbound declares")
 
     # Conditions inside one rule are ANDed, so a rule naming both a domain list
@@ -158,25 +166,23 @@ def check_rules(
     # Anything inside the tunnel can reach the panel over its private address
     # unless a rule drops geoip:private. Naming the range is not enough: a rule
     # that routes it `direct` is the opposite of a block and looks the same.
+    # The panel's own template blocks geoip:private, because a client's traffic
+    # leaves with the server's address and would otherwise reach the panel on
+    # loopback and everything else the server can see. Removing or rerouting
+    # that rule may be deliberate, so it is shown rather than failed.
     blocking = _block_tags(template)
     private_rules = [r for r in rules if any("private" in v for v in _ip_list(r))]
     private_blocks = [r for r in private_rules if r.get("outboundTag") in blocking]
-    routed = [r for r in private_rules if r not in private_blocks]
     if not private_rules:
-        problems.append("nothing blocks geoip:private; tunnel clients can reach the panel")
-    for rule in routed:
+        notes.append(
+            "no rule mentions geoip:private: tunnel clients can reach the panel and "
+            "the server's networks"
+        )
+    for rule in private_rules:
+        if rule in private_blocks:
+            continue
         target = rule.get("outboundTag") or rule.get("balancerTag")
-        if not target:
-            # Xray closes the connection with "non existing outTag" logged once
-            # per attempt; older cores sent it to the first outbound instead.
-            # Either way it is not a block anyone wrote down.
-            problems.append(
-                f"rule {rules.index(rule)} names geoip:private but no outbound at all; "
-                "Xray drops each connection with a warning rather than by design"
-            )
-        else:
-            # Explicit, so presumably deliberate - an intranet reachable through
-            # the tunnel, say. Worth seeing, not worth failing.
+        if target:
             notes.append(
                 f"rule {rules.index(rule)} sends geoip:private to {target!r}; tunnel "
                 "clients can reach whatever that outbound reaches"
