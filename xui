@@ -7,6 +7,7 @@ Usage: xui [--node NAME] [--url URL] [--token-file PATH] GROUP COMMAND [...]
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -15,6 +16,32 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib import config as config_module  # noqa: E402
 from lib.api import ApiError, Client  # noqa: E402
 from lib.commands import GROUPS  # noqa: E402
+
+# Flags that make sense anywhere on the line. They are declared once at the top
+# level with a real default, and again on every subparser with no default at
+# all, so a subparser that did not see the flag leaves the top-level value alone.
+OUTPUT_FLAGS = {
+    "--reveal": "print credentials in full instead of masking them",
+    "--json": "machine-readable output",
+}
+
+
+def _add_output_flags(parser: argparse.ArgumentParser, top: bool) -> None:
+    for flag, text in OUTPUT_FLAGS.items():
+        if top:
+            parser.add_argument(flag, action="store_true", help=text)
+        else:
+            parser.add_argument(
+                flag, action="store_true", default=argparse.SUPPRESS, help=argparse.SUPPRESS
+            )
+
+
+def _propagate_output_flags(parser: argparse.ArgumentParser) -> None:
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            for child in action.choices.values():
+                _add_output_flags(child, top=False)
+                _propagate_output_flags(child)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -30,22 +57,31 @@ def build_parser() -> argparse.ArgumentParser:
         dest="verify_tls",
         action="store_true",
         default=None,
-        help="verify the panel's TLS certificate",
+        help="verify the panel's TLS certificate against the system trust store",
     )
     parser.add_argument(
         "--no-verify-tls", dest="verify_tls", action="store_false", help=argparse.SUPPRESS
     )
     parser.add_argument(
-        "--reveal",
-        action="store_true",
-        help="print credentials in full instead of masking them",
+        "--pin-sha256",
+        dest="pin_sha256",
+        metavar="HEX",
+        help="require the panel's certificate to have this sha256 fingerprint",
     )
-    parser.add_argument("--json", action="store_true", help="machine-readable output")
+    parser.add_argument(
+        "--allow-plaintext",
+        dest="allow_plaintext",
+        action="store_true",
+        default=None,
+        help="send the token over http:// to a host that is not loopback",
+    )
+    _add_output_flags(parser, top=True)
 
     subparsers = parser.add_subparsers(dest="group", metavar="GROUP")
     for name, group in GROUPS.items():
         group_parser = subparsers.add_parser(name, help=group.help)
         group.register(group_parser)
+    _propagate_output_flags(parser)
     return parser
 
 
@@ -71,6 +107,8 @@ def main(argv: list[str]) -> int:
                 url=args.url,
                 token_file=args.token_file,
                 verify_tls=args.verify_tls,
+                pin_sha256=args.pin_sha256,
+                allow_plaintext=args.allow_plaintext,
             )
             client = Client(panel)
         return group.run(args, client)
@@ -82,6 +120,12 @@ def main(argv: list[str]) -> int:
         return 1
     except KeyboardInterrupt:
         return 130
+    except Exception as error:  # noqa: BLE001 - one line for the operator, not a traceback
+        if os.environ.get("XUI_DEBUG"):
+            raise
+        print(f"error: {type(error).__name__}: {error}", file=sys.stderr)
+        print("set XUI_DEBUG=1 for the traceback", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

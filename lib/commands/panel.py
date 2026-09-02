@@ -12,7 +12,12 @@ locks you out of the panel with no way back through the API.
 
 from __future__ import annotations
 
+import json
+import socket
+import ssl
+
 from .. import render, snapshot
+from ..api import fingerprint
 
 help = "read and write panel settings"
 
@@ -69,6 +74,9 @@ def register(parser) -> None:
     get = sub.add_parser("get", help="one setting")
     get.add_argument("key")
 
+    cert = sub.add_parser("cert", help="sha256 of the certificate the panel presents, for pinning")
+    cert.set_defaults(needs_panel=True)
+
     setter = sub.add_parser("set", help="change settings, verifying nothing else moved")
     setter.add_argument("assignments", nargs="+", metavar="KEY=VALUE")
     setter.add_argument(
@@ -123,13 +131,19 @@ def _writer(client):
 
 
 def _flatten(obj: dict) -> dict:
-    """The settings endpoint takes form fields, not JSON."""
+    """The settings endpoint takes form fields, not JSON.
+
+    A structured value has to travel as JSON text: `str()` of a list is Python
+    syntax, which the panel would store verbatim and then fail to parse.
+    """
     out = {}
     for key, value in obj.items():
         if isinstance(value, bool):
             out[key] = "true" if value else "false"
         elif value is None:
             out[key] = ""
+        elif isinstance(value, (list, dict)):
+            out[key] = json.dumps(value)
         else:
             out[key] = str(value)
     return out
@@ -148,7 +162,43 @@ def _coerce(current, raw: str):
     return raw
 
 
+def _presented_certificate(host: str, port: int) -> bytes:
+    """The certificate the panel presents, without sending the token.
+
+    The TLS handshake is the whole exchange: nothing is verified, nothing is
+    requested, so this is safe to run against an address that is not yet
+    trusted - that is precisely when a pin is taken.
+    """
+    context = ssl._create_unverified_context()
+    with (
+        socket.create_connection((host, port), timeout=15) as raw,
+        context.wrap_socket(raw, server_hostname=host) as tls,
+    ):
+        return tls.getpeercert(binary_form=True) or b""
+
+
 def run(args, client) -> int:
+    if args.command == "cert":
+        config = client.config
+        if config.scheme != "https":
+            print(f"{config.display_url} is not https; there is no certificate to pin")
+            return 2
+        from urllib.parse import urlsplit
+
+        parts = urlsplit(config.url)
+        try:
+            der = _presented_certificate(parts.hostname or "", parts.port or 443)
+        except OSError as error:
+            print(f"cannot reach {config.display_url}: {error}")
+            return 1
+        seen = fingerprint(der)
+        print(f"sha256:{seen}")
+        if config.pin_sha256:
+            print("matches the configured pin" if seen == config.pin_sha256 else "DOES NOT MATCH the configured pin")
+            return 0 if seen == config.pin_sha256 else 1
+        print("\nTo pin it: printf '%s' '" + seen + "' > secrets/pin && chmod 600 secrets/pin")
+        return 0
+
     if args.command == "list":
         settings = _reader(client)()
         rows = []
