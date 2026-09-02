@@ -72,7 +72,7 @@ A plain `http://` URL to anything but loopback is refused, because the token wou
 ```bash
 ./xui nodes list                           # the master's view of its nodes
 ./xui nodes health                         # status, heartbeat age, versions, load
-./xui nodes link-check --require-private   # assert the link has not weakened
+./xui nodes link-check --require-private   # assert the link has not weakened (or --require-private CIDR)
 
 ./xui inbound list                         # id, protocol, port, traffic
 ./xui inbound get 1                        # one inbound, credentials masked

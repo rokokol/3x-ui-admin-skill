@@ -22,8 +22,6 @@ help = "master to node links"
 # despite the name, so a link on either is trusting its network, not its TLS.
 VERIFYING_MODES = {"pin", "mtls"}
 
-TAILNET = ipaddress.ip_network("100.64.0.0/10")
-
 
 def register(parser) -> None:
     sub = parser.add_subparsers(dest="command", metavar="COMMAND")
@@ -48,8 +46,11 @@ def register(parser) -> None:
     )
     check.add_argument(
         "--require-private",
-        action="store_true",
-        help="require every node address to be inside the tailnet range",
+        nargs="?",
+        const="private",
+        metavar="CIDR",
+        help="require every node address to be private (RFC 1918 or 100.64/10), "
+        "or inside this range",
     )
     check.add_argument("--max-age", type=int, default=120)
 
@@ -99,6 +100,33 @@ def _mode(node: dict) -> str:
 
 def _address(node: dict) -> str:
     return node.get("address") or ""
+
+
+# What "private" means for a node address: RFC 1918, the carrier-grade range
+# 100.64.0.0/10 that tailnets and some providers use (the address library does
+# not count it as private), loopback, link-local and their IPv6 equivalents.
+PRIVATE_RANGES = tuple(
+    ipaddress.ip_network(cidr)
+    for cidr in (
+        "10.0.0.0/8",
+        "172.16.0.0/12",
+        "192.168.0.0/16",
+        "100.64.0.0/10",
+        "127.0.0.0/8",
+        "169.254.0.0/16",
+        "fc00::/7",
+        "fe80::/10",
+        "::1/128",
+    )
+)
+
+
+def _inside(address: str, required: str) -> bool:
+    """Whether an address is private, or inside the range asked for."""
+    parsed = ipaddress.ip_address(address)
+    if required == "private":
+        return any(parsed in network for network in PRIVATE_RANGES)
+    return parsed in ipaddress.ip_network(required, strict=False)
 
 
 def run(args, client) -> int:
@@ -181,10 +209,10 @@ def run(args, client) -> int:
             address = _address(n)
             if args.require_private and address:
                 try:
-                    if ipaddress.ip_address(address) not in TAILNET:
+                    if not _inside(address, args.require_private):
                         problems.append(
-                            f"{name}: address {address} is outside the tailnet range "
-                            f"while the link does not verify TLS"
+                            f"{name}: address {address} is outside {args.require_private} "
+                            "while the link does not verify TLS"
                         )
                 except ValueError:
                     problems.append(f"{name}: address {address} is a name, not an address")

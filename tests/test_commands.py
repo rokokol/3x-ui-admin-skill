@@ -61,6 +61,21 @@ class TestHeartbeat(unittest.TestCase):
         self.assertIsNone(nodes._heartbeat_age({}))
 
 
+class TestRequirePrivate(unittest.TestCase):
+    def test_private_means_any_private_range(self):
+        for address in ("10.0.0.5", "192.168.1.9", "172.16.4.4", "100.64.0.9", "fd00::1"):
+            self.assertTrue(nodes._inside(address, "private"), address)
+        self.assertFalse(nodes._inside("203.0.113.5", "private"))
+
+    def test_a_range_narrows_it(self):
+        self.assertTrue(nodes._inside("100.64.0.9", "100.64.0.0/10"))
+        self.assertFalse(nodes._inside("10.0.0.5", "100.64.0.0/10"))
+
+    def test_a_name_is_not_an_address(self):
+        with self.assertRaises(ValueError):
+            nodes._inside("node.example", "private")
+
+
 class TestFlatten(unittest.TestCase):
     def test_structured_values_travel_as_json(self):
         out = panel._flatten({"a": ["x", "y"], "b": {"k": 1}, "c": True, "d": None, "e": 5})

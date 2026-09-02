@@ -94,7 +94,11 @@ def _registry_dir() -> Path | None:
 
 
 def _load_node(name: str) -> dict:
-    """Read one node's TOML from the registry shared with the Ansible repo."""
+    """Read one node's TOML from the registry.
+
+    The registry is the skill's own format: a directory of `<name>.toml` files
+    that whatever manages the machines may also write, or nothing else touches.
+    """
     if tomllib is None:
         raise ConfigError("reading the node registry needs Python 3.11 or newer")
     directory = _registry_dir()
@@ -126,8 +130,8 @@ def _token_from_node(node: dict, name: str) -> str | None:
     token = node.get("token")
     if token:
         return token
-    # A registry shared with Ansible may deliberately hold no token at all, in
-    # which case the skill keeps its own beside the URL it belongs to.
+    # A registry that some other tool writes may deliberately hold no token at
+    # all, in which case the skill keeps its own beside the URL it belongs to.
     return _read_secret_file(SECRETS_DIR / f"token.{name}")
 
 
