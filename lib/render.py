@@ -2,9 +2,9 @@
 
 Panel objects carry the credentials that grant access to the VPN itself:
 client UUIDs and passwords, Reality and WireGuard private keys, subscription
-ids. Printing one into a terminal puts it into scrollback, shell history and
-any transcript of the session, so masking is the default and revealing is an
-explicit choice.
+ids, inline TLS keys. Printing one into a terminal puts it into scrollback,
+shell history and any transcript of the session, so masking is the default and
+revealing is an explicit choice.
 """
 
 from __future__ import annotations
@@ -12,46 +12,36 @@ from __future__ import annotations
 import json
 from typing import Any
 
-# Substring match, case-insensitive: the panel spells the same idea as `id`,
-# `subId`, `privateKey`, `password`, `Secret` across different objects.
-SECRET_KEY_PARTS = (
-    "password",
-    "secret",
-    "privatekey",
-    "publickey",
-    "presharedkey",
-    "token",
-    "subid",
-    "auth",
-    "shortids",
-    "uuid",
-    "fingerprint",
-    "certificate",
-    "pem",
+# Kept as names so existing imports and tests keep working.
+from .secret_keys import (  # noqa: F401
+    PERSONAL_KEYS_EXACT,
+    SECRET_KEY_PARTS,
+    SECRET_KEYS_EXACT,
+    holds_secret,
+    is_personal,
+    is_secret,
 )
 
-# Exact keys that are secret despite an innocuous name.
-SECRET_KEYS_EXACT = {"id", "pbk", "sid", "spx"}
-
-# `email` is a client's label, and in a private fleet it tends to hold real
-# people's names. It is masked as personal data, not as a credential.
-PERSONAL_KEYS_EXACT = {"email"}
-
-
-def _is_secret(key: str) -> bool:
-    lowered = key.lower()
-    if lowered in SECRET_KEYS_EXACT:
-        return True
-    return any(part in lowered for part in SECRET_KEY_PARTS)
+_is_secret = is_secret
 
 
 def mask(value: Any) -> str:
+    """A stub that identifies a value without giving much of it away.
+
+    The reveal is proportional: a sixth of the length, rounded down. A UUID
+    shows six characters, which is enough to tell two apart; a nine-character
+    password shows one. The old fixed prefix of four plus a suffix of two gave
+    away two thirds of a short password.
+    """
+    if isinstance(value, list):
+        return f"[{len(value)} line(s), masked]"
     text = str(value)
     if not text:
         return ""
     if len(text) <= 8:
         return "***"
-    return f"{text[:4]}…{text[-2:]} ({len(text)} chars)"
+    keep = len(text) // 6
+    return f"{text[:keep]}… ({len(text)} chars)"
 
 
 def mask_label(value: Any) -> str:
@@ -74,10 +64,12 @@ def redact(obj: Any, reveal: bool = False, mask_personal: bool = True) -> Any:
     if isinstance(obj, dict):
         out = {}
         for key, value in obj.items():
-            if _is_secret(key) and isinstance(value, (str, int)):
+            if is_secret(key) and holds_secret(value):
                 out[key] = mask(value)
-            elif mask_personal and key.lower() in PERSONAL_KEYS_EXACT and isinstance(value, str):
-                out[key] = mask(value)
+            elif mask_personal and is_personal(key) and isinstance(value, str):
+                # A label is masked to a stub, not to a fingerprint: it is
+                # personal data, but it is also how the operator finds the row.
+                out[key] = mask_label(value)
             else:
                 out[key] = redact(value, reveal, mask_personal)
         return out

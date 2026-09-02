@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from lib import render  # noqa: E402
+from lib import render
 
 UUID = "11111111-2222-3333-4444-555555555555"
 KEY = "aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789abcd"
@@ -62,6 +62,46 @@ class TestSecretFields(unittest.TestCase):
     def test_dumps_masks_by_default(self):
         self.assertNotIn(UUID, render.dumps({"id": UUID}))
         self.assertIn(UUID, render.dumps({"id": UUID}, reveal=True))
+
+    def test_inline_tls_key_is_masked_whole(self):
+        # A PEM key is stored as a list of lines under a key called `key`.
+        obj = {"tlsSettings": {"certificates": [{"key": ["-----BEGIN PRIVATE KEY-----", KEY]}]}}
+        out = json.dumps(render.redact(obj))
+        self.assertNotIn(KEY, out)
+        self.assertNotIn("BEGIN PRIVATE", out)
+
+    def test_socks_account_password_is_masked(self):
+        # Xray spells it `pass`, not `password`.
+        obj = {"users": [{"user": "u", "pass": "sockspassword1"}]}
+        self.assertNotIn("sockspassword1", json.dumps(render.redact(obj)))
+
+    def test_numeric_row_ids_are_not_masked(self):
+        # `id` is a UUID on a client inside inbound settings, a row number on
+        # an inbound or a node. Masking the number makes --json useless.
+        self.assertEqual(render.redact({"id": 7}), {"id": 7})
+        self.assertNotEqual(render.redact({"id": UUID}), {"id": UUID})
+
+
+class TestMask(unittest.TestCase):
+    def test_short_secrets_reveal_nothing(self):
+        self.assertEqual(render.mask("hunter2"), "***")
+        self.assertEqual(render.mask("12345678"), "***")
+
+    def test_reveal_is_proportional_not_fixed(self):
+        # A fixed prefix of four plus a suffix of two gave away two thirds of a
+        # nine-character password. At most a sixth may show.
+        for secret in ("hunter123", "Passw0rd!!", "shadowsocks1", KEY, UUID):
+            masked = render.mask(secret)
+            shown = masked.split("…")[0]
+            self.assertLessEqual(len(shown), len(secret) // 6, secret)
+            self.assertTrue(secret.startswith(shown))
+            self.assertNotIn(secret[-2:], masked.split("(")[0][len(shown):])
+
+    def test_a_uuid_still_has_a_recognisable_prefix(self):
+        self.assertTrue(render.mask(UUID).startswith("111111"))
+
+    def test_a_list_masks_to_a_count(self):
+        self.assertEqual(render.mask(["a", "b"]), "[2 line(s), masked]")
 
 
 class TestLabels(unittest.TestCase):
