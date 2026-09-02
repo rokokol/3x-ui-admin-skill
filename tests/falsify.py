@@ -114,7 +114,7 @@ DEFECTS = [
         file="lib/commands/routing.py",
         find='    elif tailnet and tailnet != "none" and not any(tailnet in _ip_list(r) for r in private_blocks):',
         replace="    elif False:",
-        consequence="tunnel clients reach the panel over its tailnet address",
+        consequence="a range the operator asked to see blocked is not checked for",
     ),
     Defect(
         name="routing/api-position-unchecked",

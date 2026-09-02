@@ -194,8 +194,11 @@ def run(args, client) -> int:
         seen = fingerprint(der)
         print(f"sha256:{seen}")
         if config.pin_sha256:
-            print("matches the configured pin" if seen == config.pin_sha256 else "DOES NOT MATCH the configured pin")
-            return 0 if seen == config.pin_sha256 else 1
+            if seen == config.pin_sha256:
+                print("matches the configured pin")
+                return 0
+            print("DOES NOT MATCH the configured pin")
+            return 1
         print("\nTo pin it: printf '%s' '" + seen + "' > secrets/pin && chmod 600 secrets/pin")
         return 0
 

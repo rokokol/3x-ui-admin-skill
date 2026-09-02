@@ -46,3 +46,22 @@ jobs:
 
       - name: Secret gate
         run: ./tests/no-secrets.sh
+
+  lint:
+    name: Lint and types
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      # Both tools are pinned to the version a developer runs locally; the
+      # rule set lives in ruff.toml and pyrightconfig.json, so the job and a
+      # local run disagree only when the repo changes
+      - uses: astral-sh/ruff-action@278981a28ce3188b1e39527901f38254bf3aac89 # v4.1.0
+        with:
+          version: "0.16.4"
+          args: check .
+
+      - uses: jakebailey/pyright-action@05c6c25338ac3a97d25e8014f5333a4d87065158 # v3.0.2
+        with:
+          version: "1.1.412"

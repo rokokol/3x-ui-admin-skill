@@ -27,6 +27,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import contextlib
+
 from lib import api, config
 from lib.commands import client_edit
 from lib.commands import db as db_cmd
@@ -156,14 +158,10 @@ class TestAgainstRealPanel(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        try:
+        with contextlib.suppress(api.ApiError):
             cls.client.post(f"inbounds/del/{cls.inbound_id}")
-        except api.ApiError:
-            pass
-        try:
+        with contextlib.suppress(api.ApiError):
             cls.client.post("clients/delOrphans")
-        except api.ApiError:
-            pass
 
     def _add_client(self, email: str, flow: str = "xtls-rprx-vision") -> None:
         self.client.post(
@@ -178,10 +176,8 @@ class TestAgainstRealPanel(unittest.TestCase):
         return dict(self.client.get(f"clients/get/{email}")["client"])
 
     def _delete(self, email: str) -> None:
-        try:
+        with contextlib.suppress(api.ApiError):
             self.client.post(f"clients/del/{email}")
-        except api.ApiError:
-            pass
 
     def test_add_sets_the_flow_when_asked_explicitly(self):
         email = "it-flow"
@@ -306,10 +302,8 @@ class TestAgainstRealPanel(unittest.TestCase):
         self.assertEqual(set(applied.changed), {"totalGB"})
 
     def _delete_quoted(self, email: str) -> None:
-        try:
+        with contextlib.suppress(api.ApiError):
             self.client.post(api.path("clients", "del", email))
-        except api.ApiError:
-            pass
 
     def test_a_negative_expiry_is_accepted_and_is_not_expired(self):
         from lib.commands.client import _expiry

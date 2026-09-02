@@ -25,7 +25,7 @@ import re
 import sqlite3
 import tempfile
 from collections.abc import Iterable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from ..secret_keys import holds_secret, is_personal, is_secret
@@ -255,7 +255,7 @@ def sanitise(path: Path) -> list[str]:
             done.append("settings: scrubbed credentials inside JSON values")
 
         for table in _tables(connection):
-            if table in ("settings",):
+            if table == "settings":
                 continue
             columns = _columns(connection, table)
             if "id" not in columns:
@@ -400,7 +400,7 @@ def run(args, client) -> int:
         print(f"unknown command: {args.command}")
         return 2
 
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     destination = Path(args.path) if args.path else Path(f"x-ui-{client.config.name}-{stamp}.db")
     if destination.exists() and not args.force:
         print(f"{destination} exists; pass --force to overwrite it")
@@ -434,7 +434,7 @@ def run(args, client) -> int:
             return 1
 
         if args.with_secrets:
-            os.chmod(temporary_path, 0o600)
+            temporary_path.chmod(0o600)
             temporary_path.replace(destination)
             print(f"wrote {destination} ({destination.stat().st_size} bytes), mode 600")
             print("This is a live copy of the fleet: every client credential, the")
@@ -453,7 +453,7 @@ def run(args, client) -> int:
                 print(f"  … and {len(problems) - 20} more")
             return 1
 
-        os.chmod(temporary_path, 0o600)
+        temporary_path.chmod(0o600)
         temporary_path.replace(destination)
     finally:
         temporary_path.unlink(missing_ok=True)

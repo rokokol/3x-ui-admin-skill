@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import ipaddress
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from .. import render
 from ..api import strip_paths
@@ -70,11 +70,11 @@ def _epoch_seconds(value) -> float | None:
         if text.isdigit():
             return _epoch_seconds(int(text))
         try:
-            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+            parsed = datetime.fromisoformat(text)
         except ValueError:
             return None
         if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=timezone.utc)
+            parsed = parsed.replace(tzinfo=UTC)
         return parsed.timestamp()
     return None
 
@@ -151,7 +151,8 @@ def run(args, client) -> int:
         if args.json:
             print(render.dumps(rows, args.reveal))
         else:
-            print(render.table(rows, ["name", "status", "heartbeat", "latency", "panel", "xray", "cpu", "mem", "error"]))
+            columns = ["name", "status", "heartbeat", "latency", "panel", "xray", "cpu", "mem", "error"]
+            print(render.table(rows, columns))
         return 0
 
     if args.command == "link-check":

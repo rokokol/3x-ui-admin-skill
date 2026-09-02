@@ -139,8 +139,8 @@ class TestPin(unittest.TestCase):
 
 class TestStripPaths(unittest.TestCase):
     def test_paths_are_dropped_from_urls(self):
-        text = 'Get "https://100.64.0.9:2053/abc123/panel/api/x": dial tcp: timeout'
-        self.assertEqual(api.strip_paths(text), 'Get "https://100.64.0.9:2053/…": dial tcp: timeout')
+        text = 'Get "https://panel.example:2053/abc123/panel/api/x": dial tcp: timeout'
+        self.assertEqual(api.strip_paths(text), 'Get "https://panel.example:2053/…": dial tcp: timeout')
 
 
 if __name__ == "__main__":
