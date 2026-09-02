@@ -91,7 +91,7 @@ A plain `http://` URL to anything but loopback is refused, because the token wou
 ./xui inbound validate                     # settings stored but never applied
 ./xui routing show                         # the rule chain, in order
 ./xui routing check                        # failures that leave no trace
-./xui routing check --tailnet 10.8.0.0/16  # the range the private block must name ('none' to skip)
+./xui routing check --tailnet 203.0.113.0/24  # also require a range geoip:private does not cover
 ./xui sub settings                         # where subscriptions are served
 ./xui sub check                            # is the subscription service coherent
 ./xui sub links -o links.txt               # export links to a 0600 file
@@ -120,6 +120,7 @@ python3 -m unittest discover -s tests    # offline, no panel needed
 python3 tests/integration.py             # against a real panel in a container
 python3 tests/falsify.py                 # break each guard, require the tests to notice
 tests/no-secrets.sh                      # nothing credential-shaped is tracked
+ruff check . && pyright                  # the lint job, with the rule set from ruff.toml
 ```
 
 The falsification harness edits one line of the implementation at a time — removes the verification step, blinds a check, skips the scrub — and reruns the suite. A defect reported as `SURVIVED` means nothing fails when that behaviour is broken, which is the only honest way to know the tests are worth running. It found two blind spots on its first run: the sanitiser's journal-mode fix and masking, neither of which had a test at all

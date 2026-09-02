@@ -15,7 +15,10 @@ from ..api import ApiError
 
 help = "routing rules and the invariants that fail quietly"
 
-TAILNET = "100.64.0.0/10"
+# geoip:private already covers the carrier-grade range 100.64.0.0/10 (checked
+# against the geoip.dat the pinned panel image ships), so a tailnet needs no
+# rule of its own. --tailnet exists for a range geoip:private does not cover.
+TAILNET = None
 
 # Rules that keep traffic where it is, as opposed to sending it somewhere else.
 LOCAL_TAGS = {"direct", "block", "blocked"}
@@ -40,9 +43,9 @@ def register(parser) -> None:
     )
     check.add_argument(
         "--tailnet",
-        default=TAILNET,
+        default=None,
         metavar="CIDR",
-        help=f"range the private block must also name (default {TAILNET}; 'none' to skip)",
+        help="a range outside geoip:private that the private block must also name",
     )
 
     sub.add_parser("outbounds", help="outbound tags the rules may point at")
@@ -152,7 +155,7 @@ def check_rules(
             "block above it silences stats"
         )
 
-    # Anything inside the tunnel can reach the panel over its tunnel address
+    # Anything inside the tunnel can reach the panel over its private address
     # unless a rule drops geoip:private. Naming the range is not enough: a rule
     # that routes it `direct` is the opposite of a block and looks the same.
     blocking = _block_tags(template)
@@ -170,8 +173,8 @@ def check_rules(
             problems.append("nothing blocks geoip:private; tunnel clients can reach the panel")
     elif tailnet and tailnet != "none" and not any(tailnet in _ip_list(r) for r in private_blocks):
         problems.append(
-            f"the private block omits {tailnet}: a tunnel client reaches the panel "
-            "over its tailnet address and enters the tailnet as a trusted peer"
+            f"the private block omits {tailnet}: a tunnel client reaches whatever "
+            "answers in that range as a trusted peer"
         )
 
     # A rule that sends traffic abroad must not sit above the rules that keep

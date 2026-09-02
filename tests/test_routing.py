@@ -47,7 +47,7 @@ class TestInvariants(unittest.TestCase):
         self.assertTrue(any("AND together" in p for p in problems))
 
     def test_api_rule_must_come_first(self):
-        rules = [HEALTHY[1], HEALTHY[0]] + HEALTHY[2:]
+        rules = [HEALTHY[1], HEALTHY[0], *HEALTHY[2:]]
         problems, _ = check_rules(template(rules))
         self.assertTrue(any("api rule is at position" in p for p in problems))
 
@@ -56,11 +56,13 @@ class TestInvariants(unittest.TestCase):
         self.assertEqual(problems, [])
         self.assertTrue(any("api" in n for n in notes))
 
-    def test_private_block_without_the_tailnet_range(self):
+    def test_geoip_private_alone_is_enough(self):
+        # geoip:private already contains 100.64.0.0/10, so a block that names
+        # only the category is complete; asking for the range was noise.
         rules = list(HEALTHY)
         rules[1] = {"outboundTag": "blocked", "ip": ["geoip:private"]}
         problems, _ = check_rules(template(rules))
-        self.assertTrue(any("100.64.0.0/10" in p for p in problems))
+        self.assertEqual(problems, [])
 
     def test_private_range_routed_direct_is_not_a_block(self):
         # The rule names geoip:private, so a check that only looks for the
@@ -73,19 +75,18 @@ class TestInvariants(unittest.TestCase):
     def test_a_blackhole_outbound_counts_as_a_block_whatever_its_tag(self):
         rules = list(HEALTHY)
         rules[1] = {"outboundTag": "sink", "ip": ["geoip:private", "100.64.0.0/10"]}
-        outbounds = OUTBOUNDS + [{"tag": "sink", "protocol": "blackhole"}]
+        outbounds = [*OUTBOUNDS, {"tag": "sink", "protocol": "blackhole"}]
         problems, _ = check_rules(template(rules, outbounds))
         self.assertEqual(problems, [])
 
-    def test_tailnet_requirement_can_be_changed_or_dropped(self):
+    def test_a_range_outside_geoip_private_can_be_required(self):
         rules = list(HEALTHY)
-        rules[1] = {"outboundTag": "blocked", "ip": ["geoip:private", "10.8.0.0/16"]}
-        problems, _ = check_rules(template(rules), tailnet="10.8.0.0/16")
+        rules[1] = {"outboundTag": "blocked", "ip": ["geoip:private"]}
+        problems, _ = check_rules(template(rules), tailnet="203.0.113.0/24")
+        self.assertTrue(any("203.0.113.0/24" in p for p in problems))
+        rules[1] = {"outboundTag": "blocked", "ip": ["geoip:private", "203.0.113.0/24"]}
+        problems, _ = check_rules(template(rules), tailnet="203.0.113.0/24")
         self.assertEqual(problems, [])
-        problems, _ = check_rules(template(rules), tailnet="none")
-        self.assertEqual(problems, [])
-        problems, _ = check_rules(template(rules))
-        self.assertTrue(any("100.64.0.0/10" in p for p in problems))
 
     def test_no_private_block_at_all(self):
         rules = [r for r in HEALTHY if "geoip:private" not in (r.get("ip") or [])]
