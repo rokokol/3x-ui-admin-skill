@@ -69,7 +69,7 @@ A registry file holds, per panel, everything the table above lists plus the two 
 
 ```toml
 # $XUI_NODES_DIR/se-1.toml, mode 600
-panel = "https://100.64.0.9:2053/abc123"
+panel = "https://192.0.2.9:2053/abc123"
 token_file = "~/.secrets/se-1.token"   # or token = "…"
 pin_sha256 = "3f2a…"                    # optional, from: ./xui panel cert
 verify_tls = false                      # optional
