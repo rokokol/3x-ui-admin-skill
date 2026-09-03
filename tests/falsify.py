@@ -36,6 +36,37 @@ class Defect:
 
 DEFECTS = [
     Defect(
+        name="routing/geodata-unvalidated",
+        file="lib/commands/routing.py",
+        find="    for entry in entries or []:",
+        replace="    for entry in []:",
+        consequence="a misspelled geosite category passes the check, matches nothing, "
+        "and stops the core at its next start",
+    ),
+    Defect(
+        name="routing/probe-expectation-ignored",
+        file="lib/commands/routing.py",
+        find="    return outbound, matched, expected is None or expected == outbound",
+        replace="    return outbound, matched, True",
+        consequence="`routing test` reports every probe as ok, so it can never go red",
+    ),
+    Defect(
+        name="routing/default-outbound-assumed-direct",
+        file="lib/commands/routing.py",
+        find='            return str(outbound["tag"])',
+        replace='            return "direct"',
+        consequence="an unmatched probe on a transit node reads as leaving locally "
+        "when it actually goes abroad",
+    ),
+    Defect(
+        name="routing/address-probed-as-a-domain",
+        file="lib/commands/routing.py",
+        find='        return "domain", destination, expected',
+        replace='        return "domain", destination, expected  # noqa\n    return "domain", destination, expected',
+        consequence="an IP probe is matched against domain rules, testing the wrong half "
+        "of the chain",
+    ),
+    Defect(
         name="snapshot/no-verification",
         file="lib/snapshot.py",
         find="    unintended = diff(intended, actual, ignore=ignored | set(missing))",

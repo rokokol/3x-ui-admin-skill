@@ -8,7 +8,10 @@ themselves: the config is valid, the panel is green, the traffic is wrong.
 
 from __future__ import annotations
 
+import ipaddress
 import json
+import os
+import sys
 
 from .. import render
 from ..api import ApiError
@@ -51,15 +54,65 @@ def register(parser) -> None:
 
     sub.add_parser("outbounds", help="outbound tags the rules may point at")
 
+    test = sub.add_parser("test", help="ask the running core where a destination would go")
+    test.add_argument(
+        "probe",
+        nargs="*",
+        metavar="DEST[=EXPECT]",
+        help="domain or IP, optionally with the outbound tag it must resolve to",
+    )
+    test.add_argument(
+        "--from-file",
+        dest="from_file",
+        metavar="PATH",
+        help="read probes from a file, one per line; # starts a comment",
+    )
+    test.add_argument("--inbound", metavar="TAG", help="arrive on this inbound tag")
+    test.add_argument("--port", type=int, default=443, help="destination port (default 443)")
+    test.add_argument("--network", default="tcp", choices=("tcp", "udp"))
+    test.add_argument(
+        "--protocol",
+        default="tls",
+        help="sniffed protocol the rules may match: tls, http, bittorrent (default tls)",
+    )
+    test.add_argument("--email", metavar="LABEL", help="client label, for user-based rules")
 
-def _template(client) -> dict:
+    snapshot = sub.add_parser("snapshot", help="write the whole template to a file, for rollback")
+    snapshot.add_argument("path", metavar="PATH", help="file to write; created mode 600")
+
+    restore = sub.add_parser("restore", help="put a snapshot back and prove the panel took it")
+    restore.add_argument("path", metavar="PATH", help="a file written by `routing snapshot`")
+    restore.add_argument(
+        "--i-understand",
+        dest="i_understand",
+        action="store_true",
+        help="required: this replaces the whole template for every client at once",
+    )
+
+
+def _envelope(client) -> dict:
+    """The whole getXraySetting response: the template and the fields beside it.
+
+    `outboundTestUrl` is one of those, and it has to travel back on a write: the
+    update endpoint reads it from the same form and substitutes a default when
+    the field is absent, so a save that carries only the template quietly
+    replaces whatever the panel had.
+    """
     # The trailing slash is required: the group is registered at "xray/" and the
     # router answers a slashless POST with a 307 that urllib will not follow.
     raw = client.post("xray/")
-    try:
-        if isinstance(raw, str):
+    if isinstance(raw, str):
+        try:
             raw = json.loads(raw)
-        if isinstance(raw, dict) and "xraySetting" in raw:
+        except json.JSONDecodeError as error:
+            raise ApiError(f"POST xray/: the response is not valid JSON: {error}") from error
+    return raw if isinstance(raw, dict) else {}
+
+
+def _template(client, envelope: dict | None = None) -> dict:
+    raw = _envelope(client) if envelope is None else envelope
+    try:
+        if "xraySetting" in raw:
             # Wrapped once more, and the inner value is sometimes an object and
             # sometimes the same object as text.
             inner = raw["xraySetting"]
@@ -102,6 +155,92 @@ def _ip_list(rule: dict) -> list[str]:
     if isinstance(value, str):
         value = [value]
     return [str(v) for v in value]
+
+
+# Prefixes that name a literal rather than a database lookup. Anything else
+# carrying a colon is a geosite:/geoip:/ext: reference the panel resolves
+# against a .dat file it may not have.
+LITERAL_DOMAIN_PREFIXES = ("domain:", "full:", "regexp:", "keyword:")
+
+
+def default_outbound(template: dict) -> str:
+    """Where traffic goes when no rule matches: the first outbound, not `direct`.
+
+    Naming it matters for reading a test result. The core reports "no rule
+    matched" rather than an outbound, and on a node whose first outbound is a
+    transit tunnel that silence means abroad, not out of the local interface.
+    """
+    for outbound in template.get("outbounds") or []:
+        if outbound.get("tag"):
+            return str(outbound["tag"])
+    return "(no outbound declared)"
+
+
+def parse_probe(text: str) -> tuple[str, str, str | None]:
+    """"ifconfig.me=blocked" -> ("domain", "ifconfig.me", "blocked")."""
+    destination, _, expected = text.partition("=")
+    destination = destination.strip()
+    expected = expected.strip() or None
+    if not destination:
+        raise ValueError(f"probe {text!r} names no destination")
+    try:
+        ipaddress.ip_address(destination)
+    except ValueError:
+        return "domain", destination, expected
+    return "ip", destination, expected
+
+
+def read_probes(path: str) -> list[str]:
+    probes = []
+    with open(path) as handle:
+        for line in handle:
+            line = line.split("#", 1)[0].strip()
+            if line:
+                probes.append(line)
+    return probes
+
+
+def probe_verdict(result: dict, fallthrough: str, expected: str | None) -> tuple[str, bool, bool]:
+    """(outbound the core would use, whether a rule matched, whether it was expected)."""
+    tag = (result or {}).get("outboundTag") or ""
+    matched = bool((result or {}).get("matched")) and bool(tag)
+    outbound = tag if tag else fallthrough
+    return outbound, matched, expected is None or expected == outbound
+
+
+def geodata_tokens(template: dict) -> tuple[list[str], list[str]]:
+    """The geosite:/geoip:/ext: references the rules make, split by which file they read."""
+    site: set[str] = set()
+    addresses: set[str] = set()
+    for rule in _rules(template):
+        value = rule.get("domain") or []
+        for entry in [value] if isinstance(value, str) else value:
+            entry = str(entry)
+            if ":" in entry and not entry.startswith(LITERAL_DOMAIN_PREFIXES):
+                site.add(entry)
+        for entry in _ip_list(rule):
+            if entry.startswith(("geoip:", "ext:")):
+                addresses.add(entry)
+    return sorted(site), sorted(addresses)
+
+
+def geodata_problems(entries) -> list[str]:
+    """Turn the panel's validation answer into problems.
+
+    A misspelled category is stored without complaint, matches nothing while it
+    sits there, and stops the core dead at its next start. Nothing else in the
+    chain says so: the rule reads fine and the panel stays green.
+    """
+    problems = []
+    for entry in entries or []:
+        token = entry.get("token", "?")
+        reason = entry.get("reason", "unresolvable")
+        where = entry.get("file") or "the geo files"
+        problems.append(
+            f"{token}: {reason} in {where}; the rule matches nothing and the next "
+            "core start refuses the config"
+        )
+    return problems
 
 
 def check_rules(
@@ -221,7 +360,8 @@ def check_rules(
 
 
 def run(args, client) -> int:
-    template = _template(client)
+    envelope = _envelope(client)
+    template = _template(client, envelope)
     rules = _rules(template)
 
     if args.command == "show":
@@ -250,6 +390,20 @@ def run(args, client) -> int:
 
     if args.command == "check":
         problems, notes = check_rules(template, args.direct_before or [], args.require_blocked)
+        site, addresses = geodata_tokens(template)
+        for kind, tokens in (("site", site), ("ip", addresses)):
+            if not tokens:
+                continue
+            try:
+                answer = client.post(
+                    "xray/geodata/validate", form={"kind": kind, "tokens": ",".join(tokens)}
+                )
+            except ApiError as error:
+                # Say so rather than passing: an unchecked reference is not a
+                # checked one, and this is the half that fails quietly.
+                notes.append(f"{len(tokens)} geo {kind} reference(s) not validated: {error}")
+                continue
+            problems += geodata_problems(answer)
         for note in notes:
             print(f"note: {note}")
         if problems:
@@ -257,6 +411,113 @@ def run(args, client) -> int:
                 print(f"FAIL {problem}")
             return 1
         print(f"ok: {len(rules)} rule(s), no silent-failure pattern found")
+        return 0
+
+    if args.command == "test":
+        probes = list(args.probe or [])
+        if args.from_file:
+            probes += read_probes(args.from_file)
+        if not probes:
+            print("routing test: no probes given", file=sys.stderr)
+            return 2
+
+        fallthrough = default_outbound(template)
+        rows, failures = [], 0
+        for entry in probes:
+            try:
+                kind, destination, expected = parse_probe(entry)
+            except ValueError as error:
+                print(f"routing test: {error}", file=sys.stderr)
+                return 2
+            form = {kind: destination, "port": str(args.port), "network": args.network}
+            if args.protocol:
+                form["protocol"] = args.protocol
+            if args.inbound:
+                form["inboundTag"] = args.inbound
+            if args.email:
+                form["email"] = args.email
+            outbound, matched, ok = probe_verdict(
+                client.post("xray/routeTest", form=form), fallthrough, expected
+            )
+            failures += not ok
+            rows.append(
+                {
+                    "destination": destination,
+                    "outbound": outbound,
+                    "by": "rule" if matched else "no rule",
+                    "expected": expected or "-",
+                    "verdict": "ok" if ok else "MISMATCH",
+                }
+            )
+
+        if args.json:
+            print(render.dumps(rows, args.reveal))
+        else:
+            print(render.table(rows, ["destination", "outbound", "by", "expected", "verdict"]))
+        if failures:
+            print(f"{failures} of {len(rows)} probe(s) took an outbound they were not expected to")
+            return 1
+        return 0
+
+    if args.command == "snapshot":
+        # 600, and never printed: an outbound in the template can carry the
+        # credential this node uses to reach the next one.
+        handle = os.fdopen(
+            os.open(args.path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w"
+        )
+        with handle:
+            json.dump(template, handle, ensure_ascii=False, indent=2)
+            handle.write("\n")
+        print(f"{args.path}: {len(rules)} rule(s), mode 600")
+        return 0
+
+    if args.command == "restore":
+        with open(args.path) as source:
+            try:
+                wanted = json.load(source)
+            except json.JSONDecodeError as error:
+                print(f"{args.path}: not valid JSON: {error}", file=sys.stderr)
+                return 2
+        if not isinstance(wanted, dict) or not _rules(wanted):
+            print(f"{args.path}: no routing.rules, so this is not a template", file=sys.stderr)
+            return 2
+
+        problems, _ = check_rules(wanted)
+        if not args.i_understand:
+            print(
+                f"restore replaces the whole template — routing, outbounds, policy, log — "
+                f"for every client at once.\n"
+                f"  now: {len(rules)} rule(s)\n"
+                f"  {args.path}: {len(_rules(wanted))} rule(s)"
+            )
+            for problem in problems:
+                print(f"  FAIL the file itself: {problem}")
+            print("\nRe-run with --i-understand to proceed.")
+            return 2
+        for problem in problems:
+            print(f"warning: the file itself: {problem}")
+
+        test_url = envelope.get("outboundTestUrl") or ""
+        client.post(
+            "xray/update",
+            form={
+                "xraySetting": json.dumps(wanted, ensure_ascii=False),
+                "outboundTestUrl": test_url,
+            },
+        )
+        readback = _template(client)
+        if readback != wanted:
+            moved = sorted(
+                key
+                for key in set(readback) | set(wanted)
+                if readback.get(key) != wanted.get(key)
+            )
+            print(
+                f"the panel did not store what the file holds; it differs in: {', '.join(moved)}",
+                file=sys.stderr,
+            )
+            return 1
+        print(f"restored {len(_rules(wanted))} rule(s); the panel reads back exactly the file")
         return 0
 
     print(f"unknown command: {args.command}")

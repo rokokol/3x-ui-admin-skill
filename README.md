@@ -103,6 +103,9 @@ A plain `http://` URL to anything but loopback is refused, because the token wou
 ./xui routing show                         # the rule chain, in order
 ./xui routing check                        # failures that leave no trace
 ./xui routing check --require-blocked 203.0.113.0/24  # a range geoip:private does not cover
+./xui routing test ifconfig.me=blocked github.com=direct  # what the running core would do
+./xui routing snapshot xray.json           # the whole template, mode 600, for rollback
+./xui routing restore xray.json --i-understand
 ./xui sub settings                         # where subscriptions are served
 ./xui sub check                            # is the subscription service coherent
 ./xui sub links -o links.txt               # export links to a 0600 file
