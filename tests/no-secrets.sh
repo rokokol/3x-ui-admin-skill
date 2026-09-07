@@ -47,12 +47,13 @@ if git grep -nIE '^[[:space:]]*(export[[:space:]]+)?(XUI_TOKEN|XUI_PIN_SHA256|TO
 fi
 
 # A panel URL is a secret as soon as it carries a real host and a base path.
-# Examples use a reserved name, loopback, or an RFC 5737 documentation address;
-# anything else is somebody's panel. 100.64/10 stays out: RFC 5737 space exists
-# only in docs, while 100.64/10 is live shared space (RFC 6598) - CGNAT and
-# Tailscale hand out real, reachable addresses from it
+# Examples use a reserved name (RFC 2606: .example, example.com, .invalid),
+# loopback, or an RFC 5737 documentation address; anything else is somebody's
+# panel. 100.64/10 stays out: RFC 5737 space exists only in docs, while
+# 100.64/10 is live shared space (RFC 6598) - CGNAT and Tailscale hand out
+# real, reachable addresses from it
 if git grep -nIoE 'https?://[A-Za-z0-9.-]+(:[0-9]+)?/[A-Za-z0-9_-]{4,}' -- "${tracked[@]}" \
-    | grep -vE '://(host|panel\.example|example\.com|[a-z0-9.-]*\.example|localhost|127\.0\.0\.1|192\.0\.2\.[0-9]+|198\.51\.100\.[0-9]+|203\.0\.113\.[0-9]+|github\.com|img\.shields\.io|fonts\.googleapis\.com|claude\.ai)(:|/)' \
+    | grep -vE '://(host|panel\.example|example\.com|[a-z0-9.-]*\.example|[a-z0-9.-]*\.invalid|localhost|127\.0\.0\.1|192\.0\.2\.[0-9]+|198\.51\.100\.[0-9]+|203\.0\.113\.[0-9]+|github\.com|img\.shields\.io|fonts\.googleapis\.com|claude\.ai)(:|/)' \
     | grep -vE 'panel/api|/sub/|/json/' >&2; then
     report "a URL that looks like a real panel address"
 fi
