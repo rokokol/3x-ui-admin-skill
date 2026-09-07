@@ -30,11 +30,7 @@ jobs:
       # Everything is stdlib-only on the runner's Python; anything that would
       # reach a registry mid-job is a behavior change with no commit behind it
       - name: CI tools come from the repo, not the registry
-        run: |
-          if grep -rEn 'pip +install |npx +[a-z@.-]|nix (run|shell) nixpkgs#' .github/workflows; then
-            echo "unpinned registry lookup in a workflow" >&2
-            exit 1
-          fi
+        run: ./check-pins.sh
 
       - name: Unit tests
         run: python3 -m unittest discover -s tests -v
