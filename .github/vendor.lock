@@ -4,4 +4,4 @@
 # works: references/bump-cascade.md in https://github.com/rokokol/ci-skill
 vendor-sync.sh rokokol/ci-skill templates/vendor-sync.sh 42d8ed275977a210e5de961a677a476decfaedaa 09ccc3ffa63510a706d8243ae05fa5d0453cc44d
 check-pins.sh rokokol/ci-skill templates/check-pins.sh 42d8ed275977a210e5de961a677a476decfaedaa e259b35eb552b43fe92582c708f4d870e5f012d6
-.github/workflows/vendor-sync.yml rokokol/ci-skill templates/github/workflows/vendor-sync.yml 42d8ed275977a210e5de961a677a476decfaedaa 31f123af249659ef9fec71455c6cd07853403512 manual
+.github/workflows/vendor-sync.yml rokokol/ci-skill templates/github/workflows/vendor-sync.yml 6c486c7c610ee0da0e8a45bedaa2e8c4ba2f288d fff3e79621131df47ef831456e02f79f976dd1fd manual
