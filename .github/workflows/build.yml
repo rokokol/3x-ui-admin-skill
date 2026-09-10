@@ -29,6 +29,10 @@ jobs:
 
       # Everything is stdlib-only on the runner's Python; anything that would
       # reach a registry mid-job is a behavior change with no commit behind it
+      # Every vendored copy is byte-equal to its source: one edited here instead of at the
+      # source fails by name — see .github/vendor.lock
+      - name: vendored copies are byte-equal to their source
+        run: ./vendor-sync.sh check
       - name: CI tools come from the repo, not the registry
         run: ./check-pins.sh
 
