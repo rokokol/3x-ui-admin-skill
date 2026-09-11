@@ -1,6 +1,5 @@
 {
   "name": "3x-ui-admin",
   "description": "Administer a 3x-ui panel over its HTTP API",
-  "version": "0.1.0",
   "skills": ["."]
 }

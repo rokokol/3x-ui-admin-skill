@@ -36,6 +36,13 @@ jobs:
       - name: CI tools come from the repo, not the registry
         run: ./check-pins.sh
 
+      # Vendored from the ci skill; falsifies itself on every run
+      - name: SKILL.md is loadable and its links resolve
+        run: ./check-skill.sh -n 3x-ui-admin .
+      # Vendored from the versioning skill; proves itself against this repo's own rule
+      - name: CHANGELOG.md has no version to be wrong about
+        run: ./check-changelog.sh -n CHANGELOG.md
+
       - name: Unit tests
         run: python3 -m unittest discover -s tests -v
 
