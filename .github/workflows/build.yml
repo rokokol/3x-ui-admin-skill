@@ -39,9 +39,12 @@ jobs:
       # Vendored from the ci skill; falsifies itself on every run
       - name: SKILL.md is loadable and its links resolve
         run: ./check-skill.sh -n 3x-ui-admin .
-      # Vendored from the versioning skill; proves itself against this repo's own rule
+      # Vendored from the versioning skill; proves itself against this repo's own rule.
+      # Pinned with -t: without it a changelog moved wholesale to another template stays
+      # green, which is the versioning skill's PITFALLS.md
       - name: CHANGELOG.md has no version to be wrong about
-        run: ./check-changelog.sh -n CHANGELOG.md
+        run: |
+          ./check-changelog.sh -n -t '## {date}' CHANGELOG.md
 
       - name: Unit tests
         run: python3 -m unittest discover -s tests -v
