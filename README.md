@@ -4,7 +4,7 @@
 
 **Administer a 3x-ui panel from the command line, without erasing what you did not mention (๑•̀ㅂ•́)و**
 
-![Claude Code](https://img.shields.io/badge/Claude_Code-D97757?style=flat&logo=anthropic&logoColor=white)
+[![Agent Skill](https://img.shields.io/badge/Agent_Skill-6E56CF?style=flat)](https://agentskills.io)
 ![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat&logo=python&logoColor=white)
 ![no dependencies](https://img.shields.io/badge/dependencies-none-3DA639?style=flat)
 [![license](https://img.shields.io/badge/MIT-3DA639?style=flat)](LICENSE)
