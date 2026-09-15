@@ -682,7 +682,9 @@ p=$(plant "$c" 'You MUST always run the gate')
 excuse "$c" "prompt-idiom $p"
 expect_quiet "$c" "$p:1: prompt-idiom" "an excused idiom"
 c=$(copy idiom-title)
-p=$(plant "$c" 'See [A comprehensive study of pseudo-tested methods](https://example.org/paper)')
+# A relative link rather than a URL: a consumer's own secret gate may read any URL with a
+# path as an address it must not leak, and the plant travels into every consumer
+p=$(plant "$c" 'See [A comprehensive study of pseudo-tested methods](zz-planted.md)')
 expect_quiet "$c" "$p:1: prompt-idiom" "an idiom inside a linked title"
 
 c=$(copy model-id)
