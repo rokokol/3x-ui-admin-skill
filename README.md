@@ -43,11 +43,24 @@ chmod 600 secrets/url secrets/token
 ./xui inbound list
 ```
 
-As a Claude Code skill, clone or symlink the directory into `~/.claude/skills/`, or take it as a plugin:
+As an agent skill it installs like any other:
+
+```bash
+npx skills add -g rokokol/3x-ui-admin-skill    # for you, everywhere
+npx skills add rokokol/3x-ui-admin-skill       # for the project you are standing in
+```
+
+Claude Code also takes it as a plugin:
 
 ```
-/plugin marketplace add rokokol/3x-ui-admin-skill
+/plugin marketplace add rokokol/skills
 /plugin install 3x-ui-admin@rokokol-skills
+```
+
+or by hand — clone into whichever skills directory your agent reads:
+
+```bash
+git clone https://github.com/rokokol/3x-ui-admin-skill ~/.claude/skills/3x-ui-admin
 ```
 
 ## Configuration
