@@ -36,6 +36,11 @@ jobs:
       - name: CI tools come from the repo, not the registry
         run: ./check-pins.sh
 
+      # Vendored from the create-readme skill; falsifies itself on every run. A paragraph
+      # on one line, no full stop closing one, plain quotation marks
+      - name: every document keeps the house rules a script can decide
+        run: ./check-prose.sh README.md SKILL.md CHANGELOG.md docs/*.md
+
       # Vendored from the ci skill; falsifies itself on every run
       - name: SKILL.md is loadable and its links resolve
         run: ./check-skill.sh -n 3x-ui-admin .
