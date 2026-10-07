@@ -1,6 +1,6 @@
 ---
 name: 3x-ui-admin
-description: Administer a 3x-ui panel over its HTTP API — inbounds, clients, hosts, master/node links, routing, Xray and panel settings, subscriptions. Use when asked to inspect or change anything inside a 3x-ui panel, to audit a panel configuration for known footguns, or to work out why a client, subscription or node link stopped working. Triggers: 3x-ui, x-ui, панель, инбаунд, клиент, подписка, нода, маршрутизация
+description: "Administer a 3x-ui panel over its HTTP API — inbounds, clients, hosts, master/node links, routing, Xray and panel settings, subscriptions. Use when asked to inspect or change anything inside a 3x-ui panel, to audit a panel configuration for known footguns, or to work out why a client, subscription or node link stopped working. Triggers: 3x-ui, x-ui, панель, инбаунд, клиент, подписка, нода, маршрутизация"
 license: MIT
 ---
 
