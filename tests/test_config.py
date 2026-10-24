@@ -154,5 +154,36 @@ class TestDisplay(unittest.TestCase):
         self.assertEqual(panel.display_url, "https://p.example:2053")
 
 
+class TestHome(unittest.TestCase):
+    """Where secrets/ lives when the skill directory cannot hold it, as in a read-only install."""
+
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.base = Path(self.directory.name)
+        self.skill = self.base / "skill"
+        self.skill.mkdir()
+
+    def tearDown(self):
+        self.directory.cleanup()
+
+    def test_xui_home_wins_over_a_skill_directory_with_secrets(self):
+        (self.skill / "secrets").mkdir()
+        home = config.home_dir({"XUI_HOME": str(self.base / "elsewhere")}, root=self.skill)
+        self.assertEqual(home, self.base / "elsewhere")
+
+    def test_a_skill_directory_with_secrets_is_its_own_home(self):
+        (self.skill / "secrets").mkdir()
+        home = config.home_dir({"XDG_CONFIG_HOME": str(self.base / "xdg")}, root=self.skill)
+        self.assertEqual(home, self.skill)
+
+    def test_without_secrets_in_the_skill_the_xdg_config_directory_is_home(self):
+        home = config.home_dir({"XDG_CONFIG_HOME": str(self.base / "xdg")}, root=self.skill)
+        self.assertEqual(home, self.base / "xdg" / "3x-ui-admin-skill")
+
+    def test_without_xdg_config_home_the_config_directory_under_home_is_used(self):
+        home = config.home_dir({"HOME": str(self.base / "user")}, root=self.skill)
+        self.assertEqual(home, self.base / "user" / ".config" / "3x-ui-admin-skill")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

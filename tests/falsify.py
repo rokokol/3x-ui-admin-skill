@@ -253,6 +253,13 @@ DEFECTS = [
         consequence="a node's token is sent to whatever panel XUI_URL happens to name",
     ),
     Defect(
+        name="config/secrets-only-in-skill-directory",
+        file="lib/config.py",
+        find='    if (root / "secrets").is_dir():',
+        replace="    if True:",
+        consequence="an install from a read-only store looks for its token where nothing can be written",
+    ),
+    Defect(
         name="config/plaintext-allowed",
         file="lib/config.py",
         find='    if config.scheme == "http" and not config.is_loopback and not config.allow_plaintext:',

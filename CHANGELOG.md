@@ -2,6 +2,13 @@
 
 Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), dated rather than numbered, and with no `Unreleased` section — a skill is read at whatever revision you have checked out, so whatever is on the default branch is what every reader already has, and a section for work that has landed but not shipped would never close. The rule lives in the [versioning](https://github.com/rokokol/versioning-skill) skill, which owns what has no version
 
+## 2026-10-24
+
+### Added
+
+- `XUI_HOME` names the directory that holds `secrets/`. Without it, a skill directory that holds `secrets/` keeps them, and otherwise they come from `$XDG_CONFIG_HOME/3x-ui-admin-skill`, so an install from a read-only directory such as the Nix store finds its token
+- `./xui panel cert` prints the pin command with the full path of `secrets/pin`
+
 ## 2026-10-08
 
 ### Fixed

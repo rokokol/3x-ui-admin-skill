@@ -1,8 +1,8 @@
 """Where the panel is and how to authenticate to it.
 
-Resolution order, first hit wins: explicit arguments, environment, the skill's
-own secrets/ directory, then a node registry shared with an infrastructure
-repository. Nothing here assumes a particular network: a panel on loopback, on
+Resolution order, first hit wins: explicit arguments, environment, the
+secrets/ directory under home_dir(), then a node registry shared with an
+infrastructure repository. Nothing here assumes a particular network: a panel on loopback, on
 a tunnel address or on the public internet is reached the same way.
 
 Naming a node changes the rule: a node's URL and token come from the node and
@@ -26,7 +26,25 @@ except ModuleNotFoundError:  # Python 3.10 and older
     tomllib = None
 
 SKILL_ROOT = Path(__file__).resolve().parent.parent
-SECRETS_DIR = SKILL_ROOT / "secrets"
+
+
+def home_dir(environ=os.environ, root: Path = SKILL_ROOT) -> Path:
+    """The private directory that holds secrets/.
+
+    XUI_HOME wins. A skill directory that already holds secrets/, as a clone
+    does, keeps them. Otherwise the XDG config directory: a plugin update
+    replaces the skill directory whole, and an install from a read-only store
+    cannot be written at all.
+    """
+    if environ.get("XUI_HOME"):
+        return Path(environ["XUI_HOME"]).expanduser()
+    if (root / "secrets").is_dir():
+        return root
+    base = environ.get("XDG_CONFIG_HOME") or str(Path(environ.get("HOME", "~")) / ".config")
+    return Path(base).expanduser() / "3x-ui-admin-skill"
+
+
+SECRETS_DIR = home_dir() / "secrets"
 
 LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
 

@@ -13,11 +13,13 @@ locks you out of the panel with no way back through the API.
 from __future__ import annotations
 
 import json
+import shlex
 import socket
 import ssl
 
 from .. import render, snapshot
 from ..api import fingerprint
+from ..config import SECRETS_DIR
 
 help = "read and write panel settings"
 
@@ -199,7 +201,8 @@ def run(args, client) -> int:
                 return 0
             print("DOES NOT MATCH the configured pin")
             return 1
-        print("\nTo pin it: printf '%s' '" + seen + "' > secrets/pin && chmod 600 secrets/pin")
+        pin = shlex.quote(str(SECRETS_DIR / "pin"))
+        print(f"\nTo pin it: printf '%s' '{seen}' > {pin} && chmod 600 {pin}")
         return 0
 
     if args.command == "list":

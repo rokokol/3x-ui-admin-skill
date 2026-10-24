@@ -10,7 +10,7 @@ license: MIT
 
 ## Access
 
-Resolution order, first hit wins: command-line flags, `XUI_URL` / `XUI_TOKEN`, then `secrets/url` + `secrets/token`. With `--node NAME` the URL and token come only from that panel: `secrets/url.NAME` + `secrets/token.NAME`, or `panel`, `token` / `token_file` and `pin_sha256` in `$XUI_NODES_DIR/NAME.toml` for a fleet kept in a registry; the environment is ignored so one panel's token can never be sent to another's address. Never hardcode a token; never print one
+Resolution order, first hit wins: command-line flags, `XUI_URL` / `XUI_TOKEN`, then `secrets/url` + `secrets/token`. `secrets/` sits in `$XUI_HOME`: by default the skill directory when it already holds `secrets/`, otherwise `$XDG_CONFIG_HOME/3x-ui-admin-skill`. With `--node NAME` the URL and token come only from that panel: `secrets/url.NAME` + `secrets/token.NAME`, or `panel`, `token` / `token_file` and `pin_sha256` in `$XUI_NODES_DIR/NAME.toml` for a fleet kept in a registry; the environment is ignored so one panel's token can never be sent to another's address. Never hardcode a token; never print one
 
 ```bash
 ./xui inbound list                        # from secrets/
